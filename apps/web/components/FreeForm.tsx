@@ -5,13 +5,6 @@ import { ask } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import AnswerView from "./AnswerView";
 
-const SUGGESTIONS = [
-  "How do I register my address?",
-  "Can I work yet?",
-  "Where do I learn German?",
-  "How do I get child benefit?",
-];
-
 export default function FreeForm({ wallet, lang }: { wallet: Wallet; lang: LangCode }) {
   const [query, setQuery] = useState("");
   const [lastQuery, setLastQuery] = useState("");
@@ -34,10 +27,10 @@ export default function FreeForm({ wallet, lang }: { wallet: Wallet; lang: LangC
 
   function onAction(card: ActionCard) {
     if (card.kind === "escalate") {
-      setActionNote("🤝 Connecting you to free, confidential counseling. A counselor sees only what you choose to share.");
+      setActionNote(t(lang, "counselorNote"));
       return;
     }
-    setActionNote(`Opening: ${card.title}`);
+    setActionNote(`${t(lang, "opening")}: ${card.title}`);
   }
 
   const clarifying = result?.needsInput && result?.clarifyingQuestion;
@@ -46,10 +39,7 @@ export default function FreeForm({ wallet, lang }: { wallet: Wallet; lang: LangC
     <div className="mx-auto max-w-md px-5 pb-28 pt-4">
       <div className="card px-4 py-4">
         <h2 className="font-display text-[20px] font-bold text-ink">{t(lang, "free")}</h2>
-        <p className="mt-1 text-[13px] text-muted">
-          Ask in your own words. The assistant checks official sources, verifies its own answer, and asks you
-          before assuming anything.
-        </p>
+        <p className="mt-1 text-[13px] text-muted">{t(lang, "askIntro")}</p>
 
         <div className="mt-3 flex items-end gap-2">
           <textarea
@@ -75,20 +65,11 @@ export default function FreeForm({ wallet, lang }: { wallet: Wallet; lang: LangC
           </button>
         </div>
 
-        {!result && !loading && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {SUGGESTIONS.map((s) => (
-              <button key={s} onClick={() => { setQuery(s); run(s); }} className="chip px-3 py-1.5 text-[13px]">
-                {s}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       {loading && (
         <div className="card mt-3 flex items-center gap-3 px-4 py-4 text-[14px] text-muted">
-          <Spinner /> Checking official sources and verifying the answer…
+          <Spinner /> {t(lang, "checking")}
         </div>
       )}
 
@@ -99,7 +80,7 @@ export default function FreeForm({ wallet, lang }: { wallet: Wallet; lang: LangC
           style={{ boxShadow: "0 0 0 2px var(--amber), 0 10px 30px -22px rgba(22,36,59,.4)" }}
         >
           <div className="mb-1 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide" style={{ color: "var(--amber)" }}>
-            <span>✋</span> One quick question
+            <span>?</span> {t(lang, "quickQuestion")}
           </div>
           <p className="text-[15px] font-medium text-ink">{result!.clarifyingQuestion}</p>
           <div className="mt-3 flex items-end gap-2">
@@ -107,7 +88,7 @@ export default function FreeForm({ wallet, lang }: { wallet: Wallet; lang: LangC
               value={clarifyAnswer}
               onChange={(e) => setClarifyAnswer(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") run(lastQuery, clarifyAnswer); }}
-              placeholder="Your answer…"
+              placeholder={t(lang, "yourAnswer")}
               className="h-11 flex-1 rounded-xl border border-line bg-paper px-3 text-[15px] text-ink outline-none focus:border-ink"
             />
             <button
@@ -115,12 +96,10 @@ export default function FreeForm({ wallet, lang }: { wallet: Wallet; lang: LangC
               disabled={!clarifyAnswer.trim()}
               className="btn btn-signal h-11 px-4 text-[14px] disabled:opacity-40"
             >
-              Answer
+              {t(lang, "answer")}
             </button>
           </div>
-          <p className="mt-2 text-[11px] text-muted">
-            This stays on your device and is only used to refine this answer.
-          </p>
+          <p className="mt-2 text-[11px] text-muted">{t(lang, "refineNote")}</p>
         </div>
       )}
 

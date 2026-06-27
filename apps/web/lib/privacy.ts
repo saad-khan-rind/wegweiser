@@ -51,8 +51,8 @@ export function deidentify(text: string): string {
  * tiny region + niche status) gets coarsened before sending.
  */
 export function kAnonymityGuard(tags: string[]): string[] {
-  const rareLang = tags.includes("lang:ar") && tags.some((t) => t.startsWith("flag:"));
-  if (rareLang && tags.length > 5) {
+  const tooSpecific = tags.some((t) => t.startsWith("flag:")) && tags.length > 5;
+  if (tooSpecific) {
     // drop the most specific flags, keep coarse status + region
     return tags.filter((t) => !t.startsWith("flag:")).slice(0, 4);
   }

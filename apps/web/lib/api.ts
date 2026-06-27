@@ -1,6 +1,6 @@
 import type { Wallet, AnswerResult, Source } from "@/lib/types";
-import { answerLocally } from "@/lib/engine";
 import { deriveTags, deidentify, kAnonymityGuard } from "@/lib/privacy";
+import { t } from "@/lib/i18n";
 
 /**
  * Resolve the API base URL at RUNTIME.
@@ -18,8 +18,7 @@ function apiBase(): string {
   return (process.env.NEXT_PUBLIC_API_URL || "").replace(/\/$/, "");
 }
 
-// CPU LLM inference + the verification loop are slow. Don't abort early — that
-// was the bug that made answers silently fall back to the on-device engine.
+// CPU LLM inference + the verification loop are slow. Don't abort early.
 function timeoutMs(): number {
   if (typeof window !== "undefined") {
     const cfg = (window as any).__WEGWEISER_CONFIG__;
@@ -33,7 +32,7 @@ export async function ask(rawQuery: string, w: Wallet, extraContext = ""): Promi
   const tags = kAnonymityGuard(deriveTags(w));
   const API = apiBase();
 
-  if (!API) return answerLocally(rawQuery, w);
+  if (!API) return unavailableAnswer(cleaned, tags, w.language);
 
   try {
     const ctrl = new AbortController();
@@ -74,9 +73,7 @@ export async function ask(rawQuery: string, w: Wallet, extraContext = ""): Promi
       trace: Array.isArray(data.trace) ? data.trace : undefined,
     };
   } catch {
-    // Backend down or aborted — keep the demo alive with the on-device engine.
-    const local = answerLocally(rawQuery, w);
-    return { ...local, origin: "device" };
+    return unavailableAnswer(cleaned, tags, w.language);
   }
 }
 
@@ -136,4 +133,36 @@ export async function refreshCrawl(region: string, lang: string, token: string) 
   });
   if (!res.ok) throw new Error(`Refresh failed (${res.status})`);
   return res.json();
+}
+
+export async function getLlmConfig(token: string) {
+  const res = await fetch(`${apiBase()}/api/admin/llm-config`, { headers: { ...adminHeaders(token) } });
+  if (!res.ok) throw new Error(`Config check failed (${res.status})`);
+  return res.json();
+}
+
+export async function setGeminiConfig(apiKey: string, token: string) {
+  const res = await fetch(`${apiBase()}/api/admin/llm-config`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...adminHeaders(token) },
+    body: JSON.stringify({ geminiApiKey: apiKey }),
+  });
+  if (!res.ok) throw new Error(`Config update failed (${res.status})`);
+  return res.json();
+}
+
+function unavailableAnswer(cleaned: string, tags: string[], lang: Wallet["language"]): AnswerResult {
+  const isDe = lang === "de";
+  return {
+    answer: isDe
+      ? "Ich kann gerade keine verifizierte Antwort aus den offiziellen Quellen erstellen. Bitte versuche es später erneut oder wende dich an eine Beratungsperson."
+      : "I can't create a verified answer from official sources right now. Please try again later or ask a counselor.",
+    cards: [{ kind: "escalate", title: t(lang, "talkHuman"), body: isDe ? "Kostenlos und vertraulich." : "Free and confidential." }],
+    sources: [],
+    confidence: 0.1,
+    deidentifiedQuery: cleaned,
+    sentTags: tags,
+    escalate: true,
+    origin: "device",
+  };
 }

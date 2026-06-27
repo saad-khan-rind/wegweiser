@@ -33,4 +33,14 @@ export class AdminController {
   refresh(@Body() body: { region?: string; lang?: string }) {
     return this.admin.refresh(body);
   }
+
+  @Get("llm-config")
+  llmConfig() {
+    return this.admin.llmConfig();
+  }
+
+  @Post("llm-config")
+  setLlmConfig(@Body() body: { geminiApiKey?: string }) {
+    return this.admin.setLlmConfig(body);
+  }
 }

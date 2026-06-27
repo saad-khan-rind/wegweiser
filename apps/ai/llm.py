@@ -10,12 +10,14 @@ import logging
 import os
 import urllib.request
 import urllib.error
+import urllib.parse
 
 log = logging.getLogger("ollama")
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434").rstrip("/")
 CHAT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 # CPU inference is slow; default to a long ceiling so requests aren't killed.
 LLM_TIMEOUT = int(os.getenv("LLM_TIMEOUT", "180"))
 NUM_PREDICT = int(os.getenv("LLM_NUM_PREDICT", "512"))
@@ -32,10 +34,29 @@ def _post(path: str, payload: dict, timeout: int) -> dict:
         return json.loads(r.read().decode("utf-8"))
 
 
-def available() -> dict:
-    """Health probe: is Ollama reachable and is the chat model present?"""
+def _gemini_key(runtime_key: str = "") -> str:
+    return (runtime_key or os.getenv("GEMINI_API_KEY", "")).strip()
+
+
+def _provider(runtime_key: str = "") -> str:
+    return "gemini" if _gemini_key(runtime_key) else "ollama"
+
+
+def available(gemini_api_key: str = "", gemini_model: str = "") -> dict:
+    """Health probe for the active provider. Gemini is used when a key exists."""
+    if _gemini_key(gemini_api_key):
+        return {
+            "reachable": True,
+            "provider": "gemini",
+            "chat_model": gemini_model or GEMINI_MODEL,
+            "chat_model_present": True,
+            "embed_model": EMBED_MODEL,
+            "embed_model_present": False,
+        }
+
     info = {"reachable": False, "chat_model": CHAT_MODEL, "chat_model_present": False,
-            "embed_model": EMBED_MODEL, "embed_model_present": False, "url": OLLAMA_URL}
+            "embed_model": EMBED_MODEL, "embed_model_present": False, "url": OLLAMA_URL,
+            "provider": "ollama"}
     try:
         req = urllib.request.Request(f"{OLLAMA_URL}/api/tags")
         with urllib.request.urlopen(req, timeout=5) as r:
@@ -50,9 +71,13 @@ def available() -> dict:
     return info
 
 
-def chat_json(system: str, user: str, temperature: float = 0.1) -> dict | None:
+def chat_json(system: str, user: str, temperature: float = 0.1,
+              gemini_api_key: str = "", gemini_model: str = "") -> dict | None:
     """Ask the model for a strict JSON object. Returns parsed dict or None."""
+    provider = _provider(gemini_api_key)
     try:
+        if provider == "gemini":
+            return _parse_json(_gemini(system, user, temperature, gemini_api_key, gemini_model))
         data = _post("/api/chat", {
             "model": CHAT_MODEL,
             "stream": False,
@@ -69,8 +94,32 @@ def chat_json(system: str, user: str, temperature: float = 0.1) -> dict | None:
         log.warning("Ollama chat failed (%s): %s", OLLAMA_URL, e)
         return None
     except Exception as e:  # noqa: BLE001
-        log.warning("Ollama chat error: %s", e)
+        log.warning("%s chat error: %s", provider, e)
         return None
+
+
+def _gemini(system: str, user: str, temperature: float, gemini_api_key: str, gemini_model: str) -> str:
+    key = urllib.parse.quote(_gemini_key(gemini_api_key), safe="")
+    model = urllib.parse.quote(gemini_model or GEMINI_MODEL, safe="")
+    payload = {
+        "systemInstruction": {"parts": [{"text": system}]},
+        "contents": [{"role": "user", "parts": [{"text": user}]}],
+        "generationConfig": {
+            "temperature": temperature,
+            "maxOutputTokens": NUM_PREDICT,
+            "responseMimeType": "application/json",
+        },
+    }
+    req = urllib.request.Request(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=LLM_TIMEOUT) as r:
+        data = json.loads(r.read().decode("utf-8"))
+    parts = (((data.get("candidates") or [{}])[0].get("content") or {}).get("parts") or [])
+    return "".join(str(p.get("text", "")) for p in parts)
 
 
 def embed(text: str) -> list[float] | None:

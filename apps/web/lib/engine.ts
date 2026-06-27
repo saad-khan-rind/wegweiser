@@ -1,6 +1,5 @@
-import type { Wallet, Station, AnswerResult, ActionCard } from "@/lib/types";
-import { STATIONS, PROFILES, KB } from "@/data/content";
-import { deriveTags, deidentify, kAnonymityGuard } from "@/lib/privacy";
+import type { Wallet, Station, AnswerResult } from "@/lib/types";
+import { STATIONS, PROFILES } from "@/data/content";
 
 export interface JourneyNode {
   station: Station;
@@ -86,69 +85,6 @@ export function nextInterviewQuestions(w: Wallet): InterviewQuestion[] {
     });
   }
   return qs;
-}
-
-// ---- Free-form answering (on-device fallback) ------------------------------
-
-function scoreEntry(query: string, keywords: string[]): number {
-  const q = query.toLowerCase();
-  let score = 0;
-  for (const k of keywords) if (q.includes(k.toLowerCase())) score += 1;
-  return score;
-}
-
-/**
- * Local, deterministic answer used when the AI backend isn't reachable, so the
- * live demo never breaks. Returns action cards, not a wall of text.
- */
-export function answerLocally(rawQuery: string, w: Wallet): AnswerResult {
-  const clean = deidentify(rawQuery);
-  const tags = kAnonymityGuard(deriveTags(w));
-
-  let best = KB[0];
-  let bestScore = -1;
-  for (const e of KB) {
-    const s = scoreEntry(clean, e.keywords);
-    if (s > bestScore) {
-      best = e;
-      bestScore = s;
-    }
-  }
-
-  const escalate = /lawyer|deport|denied|rejected|abschieb|suicide|hurt myself|emergency|police/i.test(rawQuery);
-
-  if (bestScore <= 0) {
-    return {
-      answer:
-        "I couldn't find a confident answer in the official sources for that. A human counselor can help with this one.",
-      cards: [
-        { kind: "escalate", title: "Talk to a counselor", body: "Free, confidential migration counseling." },
-        { kind: "explain", title: "Browse my journey instead" },
-      ],
-      sources: [],
-      confidence: 0.2,
-      deidentifiedQuery: clean,
-      sentTags: tags,
-      escalate: true,
-      origin: "device",
-    };
-  }
-
-  const cards: ActionCard[] = [...best.cards];
-  if (escalate && !cards.some((c) => c.kind === "escalate")) {
-    cards.push({ kind: "escalate", title: "Talk to a counselor", body: "This sounds important — a person can help." });
-  }
-
-  return {
-    answer: best.answer,
-    cards,
-    sources: best.sources,
-    confidence: escalate ? Math.min(best.confidence, 0.6) : best.confidence,
-    deidentifiedQuery: clean,
-    sentTags: tags,
-    escalate,
-    origin: "device",
-  };
 }
 
 /** Turn a station's "Explain" action into action cards (on-device). */

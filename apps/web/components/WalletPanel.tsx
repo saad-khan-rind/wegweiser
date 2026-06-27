@@ -110,7 +110,7 @@ export default function WalletPanel({
         <div className="card flex items-center justify-between px-4 py-3">
           <span className="text-[14px] font-semibold text-ink">Language</span>
           <div className="flex overflow-hidden rounded-lg border border-line">
-            {(["en", "de", "ar"] as LangCode[]).map((l) => (
+            {(["en", "de"] as LangCode[]).map((l) => (
               <button
                 key={l}
                 onClick={() => onUpdate(setLanguage(wallet, l))}

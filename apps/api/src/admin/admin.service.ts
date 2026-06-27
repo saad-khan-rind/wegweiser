@@ -1,4 +1,5 @@
 import { Injectable, Logger, ServiceUnavailableException } from "@nestjs/common";
+import { AiConfigService } from "../llm/ai-config.service";
 
 function aiUrl(): string {
   const ai = process.env.AI_SERVICE_URL?.replace(/\/$/, "");
@@ -9,6 +10,8 @@ function aiUrl(): string {
 @Injectable()
 export class AdminService {
   private readonly log = new Logger("AdminService");
+
+  constructor(private readonly aiConfig: AiConfigService) {}
 
   async ingestText(body: { title: string; text: string; source?: string; url?: string; date?: string }) {
     const res = await fetch(`${aiUrl()}/ingest`, {
@@ -43,9 +46,17 @@ export class AdminService {
     const res = await fetch(`${aiUrl()}/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ region: body.region ?? "augsburg", lang: body.lang ?? "de" }),
+      body: JSON.stringify({ region: body.region ?? "bavaria", lang: body.lang ?? "en" }),
     });
     if (!res.ok) throw new ServiceUnavailableException(`refresh failed (${res.status})`);
     return res.json();
+  }
+
+  llmConfig() {
+    return this.aiConfig.status();
+  }
+
+  setLlmConfig(body: { geminiApiKey?: string }) {
+    return this.aiConfig.setGeminiApiKey(body.geminiApiKey ?? "");
   }
 }

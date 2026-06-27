@@ -36,17 +36,18 @@
                                            └────────────────────────┘
 ```
 
-## Layered fallback (why the demo never breaks)
+## Layered fallback
 
-Each hop is optional. The product degrades gracefully instead of failing:
+Each hop is handled defensively. The product refuses or asks for details instead
+of inventing an answer:
 
-1. **No backend at all** — the web app uses its built-in engine and knowledge
-   base. Full UX, on-device answers. This is what a GitHub Pages link runs.
+1. **No backend at all** — the UI stays usable, but free-form answers show a
+   verified-unavailable state.
 2. **API up, Python down** — NestJS retrieves with its own keyword search over
    `kb.json`.
-3. **API up, no LLM key** — NestJS returns answers composed directly from the
-   retrieved sources (never invented), with action cards.
-4. **Everything up** — Python RAG retrieves, the LLM phrases a 2–3 sentence
+3. **API up, no usable LLM** — NestJS returns a low-confidence refusal with
+   sources instead of composing a shaky answer.
+4. **Everything up** — Python RAG retrieves, Gemini Flash or Ollama phrases a 2–3 sentence
    answer strictly from those sources, low-confidence cases escalate to a human.
 
 ## Request shape
@@ -54,7 +55,7 @@ Each hop is optional. The product degrades gracefully instead of failing:
 `POST /api/chat`
 
 ```json
-{ "query": "where can I learn german?", "tags": ["status:asylum","region:augsburg"], "language": "en" }
+{ "query": "where can I learn german?", "tags": ["status:asylum","region:bavaria"], "language": "en" }
 ```
 
 `query` is already de-identified on the client; the server strips PII again and

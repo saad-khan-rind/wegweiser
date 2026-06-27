@@ -77,7 +77,7 @@ def crawl_region(region: str, lang: str = "de", upsert: bool = True) -> int:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    region = sys.argv[1] if len(sys.argv) > 1 else os.getenv("CRAWL_REGION", "augsburg")
-    lang = sys.argv[2] if len(sys.argv) > 2 else os.getenv("CRAWL_LANG", "de")
+    region = sys.argv[1] if len(sys.argv) > 1 else os.getenv("CRAWL_REGION", "bavaria")
+    lang = sys.argv[2] if len(sys.argv) > 2 else os.getenv("CRAWL_LANG", "en")
     n = crawl_region(region, lang)
     print(f"Wrote/updated {n} pages")

@@ -8,7 +8,7 @@ export type ProfileId =
   | "eu"
   | "family";
 
-export type LangCode = "en" | "de" | "ar";
+export type LangCode = "en" | "de";
 
 export type DocStatus = "valid" | "expiring" | "missing" | "review";
 
@@ -26,7 +26,7 @@ export interface WalletDoc {
  */
 export interface Wallet {
   profile?: ProfileId;
-  region: string; // Integreat region slug, e.g. "augsburg"
+  region: string; // Integreat region slug, e.g. "bavaria"
   regionLabel: string;
   language: LangCode;
   hasChildren: boolean;

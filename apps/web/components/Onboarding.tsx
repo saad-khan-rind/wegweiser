@@ -103,7 +103,7 @@ export function Signpost() {
 }
 
 function LangSwitch({ lang, setLang }: { lang: LangCode; setLang: (l: LangCode) => void }) {
-  const langs: LangCode[] = ["en", "de", "ar"];
+  const langs: LangCode[] = ["en", "de"];
   return (
     <div className="flex overflow-hidden rounded-lg border border-line bg-card">
       {langs.map((l) => (

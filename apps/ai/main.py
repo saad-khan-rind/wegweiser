@@ -37,6 +37,8 @@ class AgentRequest(BaseModel):
     region: str = ""
     language: str = "en"
     extra_context: str = ""
+    gemini_api_key: str = ""
+    gemini_model: str = ""
 
 
 class RetrieveRequest(BaseModel):
@@ -54,8 +56,8 @@ class IngestRequest(BaseModel):
 
 
 class RefreshRequest(BaseModel):
-    region: str = "augsburg"
-    lang: str = "de"
+    region: str = "bavaria"
+    lang: str = "en"
 
 
 # --------------------------------------------------------------------------- #
@@ -68,14 +70,17 @@ def health() -> dict:
         "ok": True,
         "vector_store": store.backend,
         "documents": store.list(1),
-        "ollama": llm.available(),
+        "llm": llm.available(),
         "use_web": os.getenv("AGENT_USE_WEB", "1") == "1",
     }
 
 
 @app.post("/agent")
 def run_agent(req: AgentRequest) -> dict:
-    return agent.run(req.query, req.tags, req.region, req.language, req.extra_context)
+    return agent.run(
+        req.query, req.tags, req.region, req.language, req.extra_context,
+        req.gemini_api_key, req.gemini_model,
+    )
 
 
 @app.post("/retrieve")
@@ -169,8 +174,8 @@ def refresh(req: RefreshRequest) -> dict:
 # Startup crawl + periodic refresh (keeps content latest)
 # --------------------------------------------------------------------------- #
 def _refresh_loop() -> None:
-    region = os.getenv("CRAWL_REGION", "augsburg")
-    lang = os.getenv("CRAWL_LANG", "de")
+    region = os.getenv("CRAWL_REGION", "bavaria")
+    lang = os.getenv("CRAWL_LANG", "en")
     interval = int(os.getenv("CRAWL_INTERVAL_MIN", "360")) * 60
     if os.getenv("CRAWL_ON_START", "0") == "1":
         crawl_region(region, lang)

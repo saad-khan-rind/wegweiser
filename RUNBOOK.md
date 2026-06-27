@@ -10,8 +10,7 @@ Three services: **web** (static UI, port 4000) → **api** (NestJS gateway, 3001
 Two concrete bugs, both fixed:
 
 1. **The browser aborted every AI request after 8 seconds.** `llama3.1:8b` on CPU
-   takes far longer, so every real answer was silently dropped and the app fell
-   back to its offline engine — looking like the AI did nothing. The client
+   takes far longer, so every real answer was silently dropped. The client
    timeout is now 200s and configurable (`WEB_TIMEOUT_MS`).
 2. **The API URL was baked in at build time** (defaulting to `localhost:3001`), so
    the visitor's browser tried to reach *their own* machine. The web app now reads
@@ -41,7 +40,9 @@ docker compose exec ollama ollama pull nomic-embed-text   # for embeddings
 curl http://204.168.210.222:3001/api/health
 ```
 
-Open `http://204.168.210.222:4000`. Admin page: `http://204.168.210.222:4000/admin`.
+Open `http://204.168.210.222:4000`. Admin page: `http://204.168.210.222:4000/admin/`.
+From admin you can save a Gemini API key to use `gemini-flash-latest`; clear it
+to return to the current Ollama setup.
 
 `docker-compose.yml` already sets your env: `WEB_ORIGIN=http://204.168.210.222:4000`,
 `OLLAMA_URL=http://ollama:11434`, `API_URL=http://204.168.210.222:3001`, web on 4000.
@@ -69,7 +70,7 @@ docker run -d --name ai --network wegweiser \
   -e OLLAMA_MODEL=llama3.1:8b \
   -e EMBED_MODEL=nomic-embed-text \
   -e AGENT_USE_WEB=1 \
-  -e CRAWL_ON_START=1 -e CRAWL_REGION=augsburg -e CRAWL_LANG=de \
+  -e CRAWL_ON_START=1 -e CRAWL_REGION=bavaria -e CRAWL_LANG=en \
   -e PINECONE_API_KEY="${PINECONE_API_KEY:-}" \
   wegweiser-ai
 
@@ -106,13 +107,13 @@ docker run -d --name web --network wegweiser \
 curl http://204.168.210.222:3001/api/health
 ```
 
-Healthy output includes `"ai": { "ollama": { "reachable": true,
+Healthy output includes `"ai": { "llm": { "reachable": true,
 "chat_model_present": true } , "vector_store": "pinecone|memory" }`.
 
 If `chat_model_present` is false → run the `ollama pull` commands.
 If `reachable` is false → the `ai` container can't see `ollama` (same network?).
-If a browser answer falls back to the device → check `API_URL` is your public IP
-and port 3001 is open (open dev tools → Network → the `/api/chat` call).
+If the browser says it cannot verify an answer, check `API_URL` is your public IP
+and port 3001 is open.
 
 Direct AI checks:
 ```bash

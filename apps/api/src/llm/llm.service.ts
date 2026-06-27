@@ -1,4 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common";
+import { AiConfigService } from "./ai-config.service";
 
 export interface LlmJson {
   answer: string;
@@ -9,15 +10,18 @@ export interface LlmJson {
 
 /**
  * One interface, several backends. Order of preference:
- *   1. Ollama (open weights, self-hostable — the NGO's stated requirement)
- *   2. OpenAI / Anthropic (if a key is provided)
- *   3. null  -> caller composes a deterministic answer from the sources
+ *   1. Gemini Flash when an admin/runtime key is configured
+ *   2. Ollama (open weights, self-hostable)
+ *   3. null -> caller refuses or composes only from sources
  */
 @Injectable()
 export class LlmService {
   private readonly log = new Logger("LlmService");
 
-  get provider(): "ollama" | "openai" | "anthropic" | "mock" {
+  constructor(private readonly aiConfig: AiConfigService) {}
+
+  get provider(): "gemini" | "ollama" | "openai" | "anthropic" | "mock" {
+    if (this.aiConfig.geminiApiKey) return "gemini";
     if (process.env.OLLAMA_URL) return "ollama";
     if (process.env.OPENAI_API_KEY) return "openai";
     if (process.env.ANTHROPIC_API_KEY) return "anthropic";
@@ -27,6 +31,8 @@ export class LlmService {
   async compose(system: string, user: string): Promise<LlmJson | null> {
     try {
       switch (this.provider) {
+        case "gemini":
+          return this.parse(await this.gemini(system, user));
         case "ollama":
           return this.parse(await this.ollama(system, user));
         case "openai":
@@ -78,6 +84,27 @@ export class LlmService {
     });
     const data = await res.json();
     return data?.message?.content ?? "";
+  }
+
+  private async gemini(system: string, user: string): Promise<string> {
+    const model = this.aiConfig.geminiModel;
+    const key = encodeURIComponent(this.aiConfig.geminiApiKey);
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: "user", parts: [{ text: user }] }],
+        generationConfig: {
+          temperature: 0.1,
+          maxOutputTokens: 700,
+          responseMimeType: "application/json",
+        },
+      }),
+    });
+    if (!res.ok) throw new Error(`Gemini status ${res.status}`);
+    const data = await res.json();
+    return data?.candidates?.[0]?.content?.parts?.map((p: any) => p.text ?? "").join("") ?? "";
   }
 
   private async openai(system: string, user: string): Promise<string> {

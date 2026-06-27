@@ -2,8 +2,7 @@
 
 https://tally.so/r/vGpMkl — you can submit multiple times; latest wins.
 
-- [ ] **Prototype demo link** — deploy `apps/web` (GitHub Pages workflow included,
-      or `cd apps/web && npm run build` then host `out/`). Make it **public**.
+- [ ] **Prototype demo link** — deploy the Docker stack from `RUNBOOK.md`. Make it **public**.
 - [ ] **GitHub link** — push this repo, set it public.
 - [ ] **Pitch video** — record the demo flow in `docs/PITCH.md` via Loom (≤ 5 min).
 - [ ] **Slide deck** — build 8 slides from `docs/PITCH.md` (Google Slides / PDF), public.
@@ -13,9 +12,8 @@ https://tally.so/r/vGpMkl — you can submit multiple times; latest wins.
 cd apps/web && npm install && npm run build   # produces apps/web/out
 npx serve out                                  # verify locally
 ```
-Then push and enable Pages (Settings → Pages → Source: GitHub Actions), and set a
-repo variable `BASE_PATH=/<your-repo-name>`.
+Then deploy it with the web container from `RUNBOOK.md`.
 
 ### Make the hosted demo show real AI (optional)
-Deploy `apps/api` (e.g. small VPS / Render) and `apps/ai`, then set repo variable
-`API_URL=https://your-api-host`. The web app will flip to "AI online".
+Deploy `apps/api` and `apps/ai` from the Docker stack and set the web container's
+`API_URL` to the public API URL. The web app will flip to "AI online".

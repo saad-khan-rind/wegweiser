@@ -7,8 +7,8 @@ Tür an Tür Digitalfabrik / Integreat challenge ("Personal Data Wallet").
 > sources and **asks instead of assuming** when information is missing; an
 > **admin page** to upload documents into a **vector database (Pinecone)** used
 > for RAG; an **always-latest** Integreat crawler; live web retrieval; and a fix
-> for the "AI not responding" bug (an 8-second client timeout + build-time API
-> URL). **To deploy on your server, follow [`RUNBOOK.md`](./RUNBOOK.md).**
+> for the admin route/static export issue and the "AI not responding" timeout.
+> **To deploy on your server, follow [`RUNBOOK.md`](./RUNBOOK.md).**
 
 Wegweiser replaces the chatbot with a **journey you can see**. New arrivals pick
 where they are; the app draws their personal route through German bureaucracy as
@@ -30,26 +30,25 @@ ever leave the phone — and the app shows you exactly what those are.
 
 | Path | Stack | Role |
 |------|-------|------|
-| `apps/web` | Next.js 14 (static export), TypeScript, Tailwind | The product. Works **fully offline** via a built-in engine, so the live demo never breaks. |
-| `apps/api` | NestJS 10 | Orchestration: server-side de-identification, retrieval, LLM composition. Pluggable open-weights LLM. |
-| `apps/ai` | FastAPI (Python) | RAG retrieval over Integreat content (TF-IDF by default, optional multilingual embeddings). Includes an Integreat crawler. |
+| `apps/web` | Next.js 14 (static export), TypeScript, Tailwind | The product UI, admin upload/config screen, and privacy receipt. |
+| `apps/api` | NestJS 10 | Orchestration: server-side de-identification, admin guard, runtime Gemini key, retrieval, LLM composition. |
+| `apps/ai` | FastAPI (Python) | Goal-based, self-verifying RAG over uploaded docs, Integreat content, and optional live web. Includes an Integreat crawler. |
 
-The three are layered with **graceful fallback**, so the demo works at every level:
+The services are layered with **safe fallback**, so the app never invents an answer:
 
 ```
-web (on-device engine)  ──►  NestJS /api/chat  ──►  Python /retrieve  ──►  LLM
-   always works              adds real RAG          adds real corpus       adds phrasing
+web  ──►  NestJS /api/chat  ──►  Python /agent  ──►  Gemini Flash or Ollama
 ```
 
-If the API is down, the web app answers on-device. If the Python service is down,
-the API uses its own keyword search. If no LLM is configured, the API returns
-**grounded** answers straight from the sources (never invented).
+If the API or AI service is down, the UI says it cannot verify an answer right
+now. If sources are weak or missing, the assistant asks a follow-up question or
+recommends a counselor instead of guessing.
 
 ---
 
 ## Quickstart
 
-### Option A — just the demo (no backend needed)
+### Option A — frontend only
 
 ```bash
 cd apps/web
@@ -57,7 +56,7 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
-This is enough to show the entire experience.
+This shows the UI. Real answers require the API and AI service.
 
 ### Option B — full stack with real AI
 
@@ -71,31 +70,23 @@ docker compose up --build
 ```
 
 Open-weights by default: point `OLLAMA_URL` at a running [Ollama](https://ollama.com)
-(`ollama run llama3.1:8b`) and everything stays self-hosted — no third-party LLM,
-as the NGO requires.
+(`ollama run llama3.1:8b`) and everything stays self-hosted. To use Gemini
+instead, open `/admin`, enter the admin token, and save a Gemini API key; the app
+then uses `gemini-flash-latest`. Clearing the key returns to Ollama.
 
 ### Pull real Integreat content (optional)
 
 ```bash
 cd apps/ai
-python crawl.py augsburg de    # writes current region pages into ./corpus
+python crawl.py bavaria en    # writes current region pages into ./corpus
 ```
 
 ---
 
-## Deploying for the submission
+## Deploying
 
-**Web → GitHub Pages** (static, free, the safe demo link):
-
-```bash
-cd apps/web
-NEXT_PUBLIC_BASE_PATH=/wegweiser npm run build   # use your repo name as base path
-# push the apps/web/out folder to the gh-pages branch (or use the included workflow)
-```
-
-`NEXT_PUBLIC_API_URL` can point at a deployed NestJS instance (e.g. on a small VPS)
-to light up real AI in the hosted demo. Leave it empty and the demo still runs on
-the on-device engine.
+Use the Docker setup in [`RUNBOOK.md`](./RUNBOOK.md). The static frontend is
+served by the `web` container, and `/admin/` is exported as its own static route.
 
 ---
 
@@ -108,8 +99,8 @@ the on-device engine.
   shown in the UI; content comes from Integreat's per-region CMS.
 - **Data minimization → on device** → the wallet never leaves the phone; only
   de-identified queries + opaque tags are sent, and the app shows them to the user.
-- **Open source / open weights / self-hostable** → Ollama-first LLM, local RAG,
-  static frontend; no proprietary dependency required.
+- **Open source / open weights / self-hostable** → Ollama by default, optional
+  Gemini Flash through the protected admin config, local RAG, static frontend.
 
 See `docs/ARCHITECTURE.md`, `docs/DATA_MINIMIZATION.md`, and `docs/PITCH.md`.
 

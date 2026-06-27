@@ -1,12 +1,13 @@
 "use client";
 import type { Wallet, WalletDoc, LangCode, ProfileId } from "@/lib/types";
+import { supportedLang } from "@/lib/i18n";
 
 const KEY = "wegweiser.wallet.v1";
 
 export function emptyWallet(guest: boolean): Wallet {
   return {
-    region: "augsburg",
-    regionLabel: "Augsburg",
+    region: "bavaria",
+    regionLabel: "Bavaria",
     language: "en",
     hasChildren: false,
     childrenCount: 0,
@@ -32,7 +33,8 @@ export function loadWallet(): Wallet | null {
   const raw = fromSession || fromLocal;
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as Wallet;
+    const wallet = JSON.parse(raw) as Wallet;
+    return { ...wallet, language: supportedLang(wallet.language) };
   } catch {
     return null;
   }

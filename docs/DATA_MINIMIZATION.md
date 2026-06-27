@@ -24,7 +24,7 @@ breach. The NestJS backend is stateless.
 When context helps, the app derives coarse tags (`lib/privacy.ts → deriveTags`):
 
 ```
-status:asylum   family:has_children   region:augsburg   lang:en
+status:asylum   family:has_children   region:bavaria   lang:en
 ```
 
 These are categories thousands of people share — not identity. Never sent: name,

@@ -32,7 +32,7 @@ pitch 30%**. Everything below is built to hit those.
 
 **5 — The wallet (innovation: privacy by construction)**
 - Your situation is a **Personal Data Wallet that never leaves your device.**
-- Only de-identified queries + opaque tags (`status:asylum`, `region:augsburg`)
+- Only de-identified queries + opaque tags (`status:asylum`, `region:bavaria`)
   are ever sent — and we **show you exactly what those are**.
 - Guest mode forgets everything when you close the tab.
 - Live: `…address at Goethestraße 12, 86150` → `…address at [address], [postcode]`.
@@ -46,7 +46,7 @@ pitch 30%**. Everything below is built to hit those.
 - Open weights (Ollama), local RAG, static frontend — **self-hostable, no third party.**
 - Slots straight into Integreat: crawls the real per-region CMS, reuses the Zammad
   counselor hand-off, mirrors their existing de-identification.
-- Layered fallback → the demo works even fully offline.
+- Safe fallback → if sources or services are weak, the assistant says so instead of guessing.
 
 **8 — Close**
 > Wegweiser turns the AI from a question box into a personal case manager —
@@ -97,7 +97,7 @@ your data."
    Mark it **done** → progress jumps.
 4. **Ask freely** — type *"How do I get child benefit for my 2 kids at
    Goethestraße 12?"* → action cards. Open the receipt: show `[address]` stripped,
-   tags `family:has_children`, `region:augsburg`.
+   tags `family:has_children`, `region:bavaria`.
 5. **Guided** — answer one tap ("seeking asylum") → the route **re-branches** to
    the asylum line. This is the memorable moment.
 6. **Escalate** — ask something legal ("my asylum was denied") → escalation card
@@ -105,9 +105,8 @@ your data."
 7. **Wallet** — show documents (one *expiring*), the exact tags that could be
    shared, and **Erase my wallet**.
 
-> Tip: deploy the web app to GitHub Pages as the safe demo link. If you also
-> deploy the API, set `NEXT_PUBLIC_API_URL` so the hosted demo shows the green
-> "AI online" dot. Either way it works.
+> Tip: deploy the Docker stack from `RUNBOOK.md` so the web app and AI services
+> use the same public API URL and the admin route is available at `/admin/`.
 
 ---
 
@@ -126,6 +125,6 @@ your data."
   crawled live; every card carries a last-updated date. Counselors keep it current.
 - **"Could Integreat actually adopt this?"** Yes — it reuses their content API,
   their Zammad hand-off, and their existing de-identification step; it's additive.
-- **"What did you build vs. mock?"** Frontend, on-device engine, NestJS
+- **"What did you build vs. mock?"** Frontend, NestJS
   orchestration with real de-identification, and a Python RAG service over real
   content are all working. The LLM is pluggable (we demo with Ollama / a key).

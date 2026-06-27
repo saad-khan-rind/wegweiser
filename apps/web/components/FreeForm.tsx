@@ -14,17 +14,21 @@ const SUGGESTIONS = [
 
 export default function FreeForm({ wallet, lang }: { wallet: Wallet; lang: LangCode }) {
   const [query, setQuery] = useState("");
+  const [lastQuery, setLastQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnswerResult | null>(null);
   const [actionNote, setActionNote] = useState<string | null>(null);
+  const [clarifyAnswer, setClarifyAnswer] = useState("");
 
-  async function run(q: string) {
+  async function run(q: string, extraContext = "") {
     if (!q.trim()) return;
     setLoading(true);
     setActionNote(null);
     setResult(null);
-    const r = await ask(q, wallet);
+    if (!extraContext) setLastQuery(q);
+    const r = await ask(q, wallet, extraContext);
     setResult(r);
+    setClarifyAnswer("");
     setLoading(false);
   }
 
@@ -36,12 +40,15 @@ export default function FreeForm({ wallet, lang }: { wallet: Wallet; lang: LangC
     setActionNote(`Opening: ${card.title}`);
   }
 
+  const clarifying = result?.needsInput && result?.clarifyingQuestion;
+
   return (
     <div className="mx-auto max-w-md px-5 pb-28 pt-4">
       <div className="card px-4 py-4">
         <h2 className="font-display text-[20px] font-bold text-ink">{t(lang, "free")}</h2>
         <p className="mt-1 text-[13px] text-muted">
-          Ask in your own words. You get clear steps — not a wall of text — and you can always see what leaves your device.
+          Ask in your own words. The assistant checks official sources, verifies its own answer, and asks you
+          before assuming anything.
         </p>
 
         <div className="mt-3 flex items-end gap-2">
@@ -71,14 +78,7 @@ export default function FreeForm({ wallet, lang }: { wallet: Wallet; lang: LangC
         {!result && !loading && (
           <div className="mt-3 flex flex-wrap gap-2">
             {SUGGESTIONS.map((s) => (
-              <button
-                key={s}
-                onClick={() => {
-                  setQuery(s);
-                  run(s);
-                }}
-                className="chip px-3 py-1.5 text-[13px]"
-              >
+              <button key={s} onClick={() => { setQuery(s); run(s); }} className="chip px-3 py-1.5 text-[13px]">
                 {s}
               </button>
             ))}
@@ -88,19 +88,49 @@ export default function FreeForm({ wallet, lang }: { wallet: Wallet; lang: LangC
 
       {loading && (
         <div className="card mt-3 flex items-center gap-3 px-4 py-4 text-[14px] text-muted">
-          <Spinner /> Finding the most current official answer…
+          <Spinner /> Checking official sources and verifying the answer…
         </div>
       )}
 
-      {result && (
+      {/* Clarifying question — the assistant asks instead of assuming */}
+      {clarifying && (
+        <div
+          className="card mt-3 px-4 py-4 animate-rise"
+          style={{ boxShadow: "0 0 0 2px var(--amber), 0 10px 30px -22px rgba(22,36,59,.4)" }}
+        >
+          <div className="mb-1 flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide" style={{ color: "var(--amber)" }}>
+            <span>✋</span> One quick question
+          </div>
+          <p className="text-[15px] font-medium text-ink">{result!.clarifyingQuestion}</p>
+          <div className="mt-3 flex items-end gap-2">
+            <input
+              value={clarifyAnswer}
+              onChange={(e) => setClarifyAnswer(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") run(lastQuery, clarifyAnswer); }}
+              placeholder="Your answer…"
+              className="h-11 flex-1 rounded-xl border border-line bg-paper px-3 text-[15px] text-ink outline-none focus:border-ink"
+            />
+            <button
+              onClick={() => run(lastQuery, clarifyAnswer)}
+              disabled={!clarifyAnswer.trim()}
+              className="btn btn-signal h-11 px-4 text-[14px] disabled:opacity-40"
+            >
+              Answer
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] text-muted">
+            This stays on your device and is only used to refine this answer.
+          </p>
+        </div>
+      )}
+
+      {result && !clarifying && (
         <div className="card mt-3 px-4 py-4">
           <AnswerView result={result} lang={lang} onAction={onAction} />
         </div>
       )}
 
-      {actionNote && (
-        <div className="card mt-3 px-4 py-3 text-[13px] text-ink animate-rise">{actionNote}</div>
-      )}
+      {actionNote && <div className="card mt-3 px-4 py-3 text-[13px] text-ink animate-rise">{actionNote}</div>}
     </div>
   );
 }

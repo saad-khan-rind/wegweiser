@@ -3,6 +3,13 @@
 A guided, privacy-first migration assistant for the **AI for Good Hackathon** ·
 Tür an Tür Digitalfabrik / Integreat challenge ("Personal Data Wallet").
 
+> **This version adds:** a goal-based, **self-verifying agent** that cites its
+> sources and **asks instead of assuming** when information is missing; an
+> **admin page** to upload documents into a **vector database (Pinecone)** used
+> for RAG; an **always-latest** Integreat crawler; live web retrieval; and a fix
+> for the "AI not responding" bug (an 8-second client timeout + build-time API
+> URL). **To deploy on your server, follow [`RUNBOOK.md`](./RUNBOOK.md).**
+
 Wegweiser replaces the chatbot with a **journey you can see**. New arrivals pick
 where they are; the app draws their personal route through German bureaucracy as
 a **transit line**. Every stop expands into clear steps, the documents to bring,

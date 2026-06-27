@@ -25,6 +25,7 @@ class Doc:
     updated_at: str
     tags: list[str]
     text: str
+    url: str = ""
     tf: dict[str, float] = field(default_factory=dict)
 
 
@@ -68,6 +69,7 @@ class Retriever:
                 title=meta.get("title", path.stem),
                 origin=meta.get("origin", "integreat"),
                 updated_at=meta.get("updated_at", "2026-01-01"),
+                url=meta.get("url", ""),
                 tags=[t.strip() for t in meta.get("tags", "").split(",") if t.strip()],
                 text=body,
             ))
@@ -120,6 +122,6 @@ class Retriever:
                 continue
             out.append({
                 "id": d.id, "title": d.title, "origin": d.origin,
-                "updatedAt": d.updated_at, "tags": d.tags, "text": d.text, "score": round(s, 4),
+                "updatedAt": d.updated_at, "url": d.url, "tags": d.tags, "text": d.text, "score": round(s, 4),
             })
         return out

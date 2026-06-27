@@ -1,40 +1,58 @@
+# Wegweiser — full stack for a self-hosted server.
+#   docker compose up --build
+#
+# The web app reads its API URL at RUNTIME (no rebuild needed). Set API_URL to a
+# browser-reachable address (your server's public IP), NOT an internal docker
+# hostname. ollama:11434 is only reachable *between* containers.
 services:
   ollama:
-    image: ollama/ollama
-    restart: unless-stopped
-    volumes:
-      - ollama_data:/root/.ollama
+    image: ollama/ollama:latest
+    ports: ["11434:11434"]
+    volumes: ["ollama:/root/.ollama"]
+    # After first start, pull the models (see RUNBOOK.md):
+    #   docker compose exec ollama ollama pull llama3.1:8b
+    #   docker compose exec ollama ollama pull nomic-embed-text
 
   ai:
     build: ./apps/ai
-    ports: ["4002:3002"]
     environment:
-      - USE_EMBEDDINGS=0
+      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_MODEL=llama3.1:8b
+      - EMBED_MODEL=nomic-embed-text
+      - AGENT_USE_WEB=1
+      - AGENT_MAX_ITERS=1
+      # Optional Pinecone (falls back to in-memory store if unset):
+      - PINECONE_API_KEY=${PINECONE_API_KEY:-}
+      - PINECONE_INDEX=${PINECONE_INDEX:-wegweiser}
+      - PINECONE_CLOUD=${PINECONE_CLOUD:-aws}
+      - PINECONE_REGION=${PINECONE_REGION:-us-east-1}
+      # Always-latest crawl on boot + every 6h:
+      - CRAWL_ON_START=1
+      - CRAWL_INTERVAL_MIN=360
+      - CRAWL_REGION=augsburg
+      - CRAWL_LANG=de
+    depends_on: [ollama]
 
   api:
     build: ./apps/api
-    ports: ["4001:3001"]
+    ports: ["3001:3001"]
     environment:
       - PORT=3001
       - WEB_ORIGIN=http://204.168.210.222:4000
       - AI_SERVICE_URL=http://ai:3002
-      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-    depends_on:
-      - ai
-      - ollama
+      - AGENT_TIMEOUT_MS=200000
+      - ADMIN_TOKEN=${ADMIN_TOKEN:-change-me}
+    depends_on: [ai]
 
   web:
-    build: 
-      context: ./apps/web
-      args:
-        - NEXT_PUBLIC_API_URL=http://204.168.210.222:4001
+    build: ./apps/web
     ports: ["4000:3000"]
-    depends_on:
-      - api
+    environment:
+      # MUST be reachable from the user's browser (public IP), not localhost:
+      - API_URL=http://204.168.210.222:3001
+      - WEB_TIMEOUT_MS=200000
+      - PORT=3000
+    depends_on: [api]
 
 volumes:
-  ollama_data:
-    external: true
+  ollama:

@@ -1,0 +1,5 @@
+# Optional. Installed best-effort in the Docker image; the service runs without
+# them (in-memory vector store, no PDF parsing, no live web). All imports guarded.
+pinecone>=5.0,<10
+pypdf>=4.2,<7
+ddgs>=9.0,<10

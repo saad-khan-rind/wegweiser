@@ -38,6 +38,7 @@ export default function AnswerView({
       <ConfidenceRow confidence={result.confidence} lang={lang} />
       {result.sources.length > 0 && <SourceList sources={result.sources} lang={lang} />}
       <PrivacyReceipt result={result} lang={lang} />
+      {result.trace && result.trace.length > 0 && <VerifyTrace trace={result.trace} />}
     </div>
   );
 }
@@ -90,22 +91,48 @@ function SourceList({ sources, lang }: { sources: Source[]; lang: LangCode }) {
       <ul className="space-y-1">
         {sources.map((s, i) => (
           <li key={i} className="flex items-center justify-between gap-2 text-[13px]">
-            <span className="flex items-center gap-2 text-ink">
+            <span className="flex min-w-0 items-center gap-2 text-ink">
               <span
-                className="rounded px-1.5 py-0.5 font-mono text-[10px] uppercase"
+                className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] uppercase"
                 style={{ background: "var(--ink)", color: "var(--paper)" }}
               >
                 {s.origin}
               </span>
-              {s.title}
+              {s.href ? (
+                <a href={s.href} target="_blank" rel="noopener noreferrer" className="truncate underline decoration-dotted underline-offset-2 hover:decoration-solid">
+                  {s.title}
+                </a>
+              ) : (
+                <span className="truncate">{s.title}</span>
+              )}
             </span>
-            <span className="shrink-0 font-mono text-[11px] text-muted">
-              {t(lang, "updated")} {fmt(s.updatedAt)}
-            </span>
+            {s.updatedAt && (
+              <span className="shrink-0 font-mono text-[11px] text-muted">
+                {t(lang, "updated")} {fmt(s.updatedAt)}
+              </span>
+            )}
           </li>
         ))}
       </ul>
     </div>
+  );
+}
+
+function VerifyTrace({ trace }: { trace: string[] }) {
+  return (
+    <details className="mt-3 rounded-xl border border-line bg-paper/60">
+      <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-muted">
+        🔎 How I checked this ({trace.length} steps)
+      </summary>
+      <ol className="space-y-1 border-t border-line px-4 py-3">
+        {trace.map((step, i) => (
+          <li key={i} className="flex gap-2 text-[12px] leading-snug text-ink">
+            <span className="font-mono text-muted">{i + 1}.</span>
+            {step}
+          </li>
+        ))}
+      </ol>
+    </details>
   );
 }
 

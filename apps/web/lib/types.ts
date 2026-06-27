@@ -112,4 +112,7 @@ export interface AnswerResult {
   sentTags: string[]; // opaque category tags derived from the wallet
   escalate: boolean;
   origin: "device" | "server";
+  clarifyingQuestion?: string;
+  needsInput?: boolean;
+  trace?: string[];
 }

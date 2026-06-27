@@ -7,17 +7,17 @@ services:
 
   ai:
     build: ./apps/ai
-    ports: ["4002:3002"] # Host port 4002
+    ports: ["4002:3002"]
     environment:
       - USE_EMBEDDINGS=0
 
   api:
     build: ./apps/api
-    ports: ["4001:3001"] # Host port 4001
+    ports: ["4001:3001"]
     environment:
-      - PORT=3001 # Internal container port stays 3001
-      - WEB_ORIGIN=http://204.168.210.222:4000 # Allow CORS from new frontend port
-      - AI_SERVICE_URL=http://ai:3002 # Unchanged (internal Docker network)
+      - PORT=3001
+      - WEB_ORIGIN=http://204.168.210.222:4000
+      - AI_SERVICE_URL=http://ai:3002
       - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
@@ -27,10 +27,11 @@ services:
       - ollama
 
   web:
-    build: ./apps/web
-    ports: ["4000:3000"] # Host port 4000
-    environment:
-      - NEXT_PUBLIC_API_URL=http://204.168.210.222:4001 # Point Next.js to new API port
+    build: 
+      context: ./apps/web
+      args:
+        - NEXT_PUBLIC_API_URL=http://204.168.210.222:4001
+    ports: ["4000:3000"]
     depends_on:
       - api
 

@@ -10,10 +10,9 @@
    Wallet (on device)  │  • profile, flags, docs, progress        │
                        │  • NEVER sent as-is                       │
                        │                                          │
-                       │  On-device engine (always works)         │
-                       │  • journey builder                        │
-                       │  • guided interview                       │
-                       │  • free-form → action cards               │
+                       │  Test console + admin link                │
+                       │  • English / German only                  │
+                       │  • region + question input                │
                        │  • de-identify + tag derivation           │
                        └───────────────┬──────────────────────────┘
                           de-identified query + opaque tags only
@@ -23,16 +22,16 @@
                        │          apps/api  (NestJS)              │
                        │  • de-identify again (defense in depth)  │
                        │  • sanitize tags (drop free text)        │
-                       │  • retrieve → compose → ground            │
+                       │  • proxy chat/admin calls                 │
                        └───────┬───────────────────────┬──────────┘
                                │                       │
-                     /retrieve │                       │ chat completion
+                  admin/chat │                       │ verified answer
                                ▼                       ▼
                 ┌──────────────────────┐   ┌────────────────────────┐
                 │  apps/ai (FastAPI)   │   │  LLM provider          │
-                │  RAG over Integreat  │   │  Ollama (open weights) │
-                │  TF-IDF / embeddings │   │  · OpenAI · Anthropic  │
-                └──────────────────────┘   │  · or grounded mock    │
+                │  RAG over uploads +  │   │  Gemini Flash if key   │
+                │  official web crawl  │   │  else Ollama           │
+                └──────────────────────┘   │  or grounded refusal   │
                                            └────────────────────────┘
 ```
 
@@ -41,13 +40,13 @@
 Each hop is handled defensively. The product refuses or asks for details instead
 of inventing an answer:
 
-1. **No backend at all** — the UI stays usable, but free-form answers show a
+1. **No backend at all** — the UI stays usable, but answers show a
    verified-unavailable state.
 2. **API up, Python down** — NestJS retrieves with its own keyword search over
    `kb.json`.
 3. **API up, no usable LLM** — NestJS returns a low-confidence refusal with
    sources instead of composing a shaky answer.
-4. **Everything up** — Python RAG retrieves, Gemini Flash or Ollama phrases a 2–3 sentence
+4. **Everything up** — Python RAG retrieves, Gemini Flash or Ollama phrases a 2-3 sentence
    answer strictly from those sources, low-confidence cases escalate to a human.
 
 ## Request shape
@@ -77,8 +76,9 @@ drops any tag that isn't an opaque `key:value` category. Response:
 
 This prototype is intentionally compatible with the existing stack:
 
-- The `apps/ai` corpus is populated by `crawl.py` from Integreat's public per-region
-  page API, so retrieval runs over **real, current** content.
+- The `apps/ai` corpus is populated by admin uploads, official public URLs for
+  general/Bavaria crawl, and Integreat's public per-region page API where a city
+  region exists, so retrieval runs over **real, current** content.
 - The de-identification mirrors the approach already in `integreat-chat`
   (the `SUMMARIZE_MESSAGE` step that strips personal details before retrieval).
 - Human escalation maps onto Integreat's existing Zammad counselor hand-off.
@@ -87,11 +87,9 @@ This prototype is intentionally compatible with the existing stack:
 
 ## Frontend structure
 
-- `lib/wallet.ts` — the on-device store (local vs session for guest mode)
+- `app/page.tsx` — live RAG test console for language, region, question, health,
+  answer, citations, and verification trace
+- `app/admin/page.tsx` — admin upload/crawl/status screen
+- `lib/api.ts` — runtime API client with long timeout and safe fallback refusal
 - `lib/privacy.ts` — de-identification, tag derivation, k-anonymity guard
-- `lib/engine.ts` — journey builder, guided interview, on-device answers
-- `lib/api.ts` — backend client with timeout + fallback to the engine
-- `data/content.ts` — stations, journey templates, knowledge base
-- `components/JourneyMap.tsx` — the signature transit-line view
-- `components/StationSheet.tsx` — the boarding-pass stop detail
-- `components/AnswerView.tsx` — action cards, confidence, sources, privacy receipt
+- `components/AnswerView.tsx` — confidence, sources, and privacy receipt

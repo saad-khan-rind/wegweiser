@@ -17,8 +17,9 @@ Two concrete bugs, both fixed:
    its API URL at **runtime** from `config.js`, written from `$API_URL` when the
    container starts. No rebuild needed to change it.
 
-Two operational must-dos (below): **pull the Ollama models**, and set **`API_URL`
-to your public IP**, not `localhost` or `http://ollama`.
+Two operational must-dos (below): **pull the Ollama chat model** if you are not
+using Gemini, and set **`API_URL` to your public IP**, not `localhost` or
+`http://ollama`.
 
 ---
 
@@ -34,9 +35,11 @@ export PINECONE_API_KEY=...        # omit to use the built-in in-memory store
 # 2) build + start everything
 docker compose up --build -d
 
-# 3) pull the models INTO the ollama container (one time)
+# 3) pull the chat model INTO the ollama container (one time, unless using Gemini)
 docker compose exec ollama ollama pull llama3.1:8b
-docker compose exec ollama ollama pull nomic-embed-text   # for embeddings
+# Optional semantic embeddings:
+# docker compose exec ollama ollama pull nomic-embed-text
+# then set EMBED_PROVIDER=ollama in apps/ai/.env
 
 # 4) check health
 curl http://204.168.210.222:3001/api/health
@@ -73,6 +76,7 @@ docker run -d --name ai --network wegweiser \
   -e OLLAMA_URL=http://ollama:11434 \
   -e OLLAMA_MODEL=llama3.1:8b \
   -e EMBED_MODEL=nomic-embed-text \
+  -e EMBED_PROVIDER=hash \
   -e AGENT_USE_WEB=1 \
   -e CRAWL_ON_START=1 -e CRAWL_REGION=bavaria -e CRAWL_LANG=en \
   -e PINECONE_API_KEY="${PINECONE_API_KEY:-}" \
@@ -114,10 +118,13 @@ curl http://204.168.210.222:3001/api/health
 Healthy output includes `"ai": { "llm": { "reachable": true,
 "chat_model_present": true } , "vector_store": "pinecone|memory" }`.
 
-If `chat_model_present` is false → run the `ollama pull` commands.
+If `chat_model_present` is false → run the `ollama pull llama3.1:8b` command.
 If `reachable` is false → the `ai` container can't see `ollama` (same network?).
 If the browser says it cannot verify an answer, check `API_URL` is your public IP
 and port 3001 is open.
+If `pinecone.embedding_provider` is `hash`, that is expected for the default
+demo setup. Switch to `EMBED_PROVIDER=ollama` only after pulling
+`nomic-embed-text`.
 
 Direct AI checks:
 ```bash
@@ -135,7 +142,8 @@ docker exec api curl -s http://ai:3002/health   # api -> ai reachability
 4. The document is embedded and stored in the vector DB (Pinecone if
    `PINECONE_API_KEY` is set, otherwise in-memory). The agent retrieves it and
    **cites the source** in answers.
-5. "Crawl latest" pulls fresh Integreat content for a region on demand.
+5. "Crawl latest" pulls fresh official migration content on demand. Bavaria/general
+   uses official public sources; city names use Integreat when available.
 
 ---
 
@@ -143,8 +151,11 @@ docker exec api curl -s http://ai:3002/health   # api -> ai reachability
 
 Set `PINECONE_API_KEY` (and optionally `PINECONE_INDEX`, `PINECONE_CLOUD`,
 `PINECONE_REGION`) on the **ai** container. The index is created automatically
-with the embedding dimension (768 for `nomic-embed-text`). Without a key, an
-in-memory store is used so everything still works for a demo.
+with the embedding dimension (768 by default). Without a key, an in-memory store
+is used so everything still works for a demo.
+
+If a previous broken run filled an index with bad crawl data, delete that
+Pinecone index or use a fresh `PINECONE_INDEX` before demoing.
 
 ## Speed notes (CPU)
 

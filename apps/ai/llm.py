@@ -25,6 +25,7 @@ GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 # CPU inference is slow; default to a long ceiling so requests aren't killed.
 LLM_TIMEOUT = int(os.getenv("LLM_TIMEOUT", "180"))
 NUM_PREDICT = int(os.getenv("LLM_NUM_PREDICT", "512"))
+_embed_warned = False
 
 
 def _post(path: str, payload: dict, timeout: int) -> dict:
@@ -126,12 +127,27 @@ def _gemini(system: str, user: str, temperature: float) -> str:
 
 
 def embed(text: str) -> list[float] | None:
+    global _embed_warned
+    last_error: Exception | None = None
+    try:
+        # Ollama's current embeddings endpoint is /api/embed. Older installs
+        # used /api/embeddings, so keep both for compatibility.
+        data = _post("/api/embed", {"model": EMBED_MODEL, "input": text}, 60)
+        embeddings = data.get("embeddings")
+        emb = embeddings[0] if isinstance(embeddings, list) and embeddings else data.get("embedding")
+        if isinstance(emb, list) and emb:
+            return emb
+    except Exception as e:  # noqa: BLE001
+        last_error = e
     try:
         data = _post("/api/embeddings", {"model": EMBED_MODEL, "prompt": text}, 60)
         emb = data.get("embedding")
         return emb if isinstance(emb, list) and emb else None
     except Exception as e:  # noqa: BLE001
-        log.warning("Ollama embed failed: %s", e)
+        last_error = e
+        if not _embed_warned:
+            _embed_warned = True
+            log.warning("Ollama embed unavailable, using configured fallback if present: %s", last_error)
         return None
 
 

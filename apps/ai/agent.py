@@ -48,12 +48,12 @@ def gather_sources(query: str, tags: list[str], k: int = 4, region: str = "", la
             "score": m.get("score", 0),
         })
 
-    # 2) crawled / bundled Integreat content
+    # 2) crawled official / Integreat content
     for d in _corpus.retrieve(query, tags, k=k):
         sources.append({
             "title": d["title"], "text": d["text"], "source": d["origin"],
             "url": d.get("url", ""), "date": d.get("updatedAt", ""),
-            "origin": "integreat", "score": d.get("score", 0),
+            "origin": d.get("origin", "crawler"), "score": d.get("score", 0),
         })
 
     # 3) live web for the latest info
@@ -144,7 +144,7 @@ def run(query: str, tags: list[str], region: str = "", language: str = "en",
     goal = query if not extra_context else f"{query}\nAdditional info from user: {extra_context}"
     trace: list[str] = []
     sources = gather_sources(query, tags, region=region, language=answer_language)
-    trace.append(f"Gathered {len(sources)} sources (uploads + Integreat + web)")
+    trace.append(f"Gathered {len(sources)} sources (uploads + crawler + web)")
 
     if _looks_vague(query) and not extra_context and len(sources) < 2:
         return _clarify_first(answer_language, trace, sources)

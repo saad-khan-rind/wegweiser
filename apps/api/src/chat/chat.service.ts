@@ -146,7 +146,7 @@ export class ChatService {
   private systemPrompt(language: "en" | "de"): string {
     const answerLanguage = language === "de" ? "German" : "English";
     return [
-      "You are Wegweiser, a migration guidance assistant for newcomers in Germany, built on Integreat's content.",
+      "You are Wegweiser, a migration guidance assistant for newcomers in Germany, built on official sources.",
       "Answer ONLY from the provided sources. If the sources do not answer the question, say so and recommend a human counselor.",
       `Answer in ${answerLanguage}.`,
       "Be brief: 2-3 sentences maximum, plain language, no jargon.",
@@ -182,7 +182,4 @@ function detectLanguage(query: string, requested?: string): "en" | "de" {
 
 function clamp(n: number): number {
   return Math.max(0, Math.min(1, n));
-}
-function firstSentences(text: string, n: number): string {
-  return text.split(/(?<=[.!?])\s+/).slice(0, n).join(" ");
 }

@@ -6,7 +6,7 @@ Tür an Tür Digitalfabrik / Integreat challenge ("Personal Data Wallet").
 > **This version adds:** a goal-based, **self-verifying agent** that cites its
 > sources and **asks instead of assuming** when information is missing; an
 > **admin page** to upload documents into a **vector database (Pinecone)** used
-> for RAG; an **always-latest** Integreat crawler; live web retrieval; and a fix
+> for RAG; an **always-latest** official-source crawler; live web retrieval; and a fix
 > for the admin route/static export issue and the "AI not responding" timeout.
 > **To deploy on your server, follow [`RUNBOOK.md`](./RUNBOOK.md).**
 
@@ -32,7 +32,7 @@ ever leave the phone — and the app shows you exactly what those are.
 |------|-------|------|
 | `apps/web` | Next.js 14 (static export), TypeScript, Tailwind | The product UI, admin upload screen, and privacy receipt. |
 | `apps/api` | NestJS 10 | Orchestration: server-side de-identification, admin guard, retrieval, LLM composition fallback. |
-| `apps/ai` | FastAPI (Python) | Goal-based, self-verifying RAG over uploaded docs, Integreat content, and optional live web. Includes an Integreat crawler. |
+| `apps/ai` | FastAPI (Python) | Goal-based, self-verifying RAG over uploaded docs, official web content, Integreat city content, and optional live web. |
 
 The services are layered with **safe fallback**, so the app never invents an answer:
 
@@ -71,16 +71,18 @@ docker compose up --build
 ```
 
 Open-weights by default: point `OLLAMA_URL` at a running [Ollama](https://ollama.com)
-(`ollama run llama3.1:8b`) and everything stays self-hosted. To use Gemini
-instead, set `GEMINI_API_KEY` in `apps/ai/.env` (see `apps/ai/.env.example`).
-When that key is present, the AI service uses `gemini-flash-latest`; when it is
-empty, it uses Ollama.
+(`ollama run llama3.1:8b`) and everything stays self-hosted. Embeddings default
+to the built-in deterministic hash provider so Pinecone works even when Ollama
+has no embedding model pulled. To use Gemini instead, set `GEMINI_API_KEY` in
+`apps/ai/.env` (see `apps/ai/.env.example`). When that key is present, the AI
+service uses `gemini-flash-latest`; when it is empty, it uses Ollama.
 
-### Pull real Integreat content (optional)
+### Pull current official content (optional)
 
 ```bash
 cd apps/ai
-python crawl.py bavaria en    # writes current region pages into ./corpus
+python crawl.py bavaria en    # writes current official pages into ./corpus
+python crawl.py augsburg de   # uses Integreat for a city/region when available
 ```
 
 ---
@@ -98,7 +100,8 @@ served by the `web` container, and `/admin/` is exported as its own static route
 - **Very high answer accuracy** → answers are grounded in sources only; a guided,
   tappable question space keeps retrieval clean; low-confidence cases escalate to a human.
 - **Current legal situation** → every source carries its origin and last-updated date,
-  shown in the UI; content comes from Integreat's per-region CMS.
+  shown in the UI; content comes from uploaded documents, official public sources,
+  and Integreat's per-region CMS where available.
 - **Data minimization → on device** → the wallet never leaves the phone; only
   de-identified queries + opaque tags are sent, and the app shows them to the user.
 - **Open source / open weights / self-hostable** → Ollama by default, optional

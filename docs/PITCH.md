@@ -74,10 +74,11 @@ action cards, and we open the **"what leaves your device"** receipt to show the
 address was stripped and only tags were sent. Tap a hard question → it escalates
 to a human.
 
-**(3:15–4:15) How it's built.** On-device wallet, opaque tags, open-weights LLM
-via Ollama, local RAG over real Integreat content, human hand-off through their
-existing Zammad. Self-hostable end to end. And it degrades gracefully — what
-you're seeing runs even with the backend switched off.
+**(3:15–4:15) How it's built.** On-device wallet, opaque tags, local RAG over
+uploaded documents plus current official sources, optional Gemini Flash or
+open-weights Ollama, and human hand-off through their existing Zammad.
+Self-hostable end to end. And it degrades gracefully: when sources are missing,
+it asks instead of guessing.
 
 **(4:15–5:00) Close.** "Wegweiser is a GPS for migration that keeps your data in
 your pocket. Proactive instead of reactive, accurate because it's grounded, and

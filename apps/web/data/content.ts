@@ -417,7 +417,7 @@ export const PROFILES: Record<string, ProfileMeta> = {
 
 // ---------------------------------------------------------------------------
 // Knowledge base for free-form questions. Matched on-device; in production
-// this is replaced by the RAG service over Integreat content + web crawl.
+// this is replaced by the RAG service over uploaded docs + official web crawl.
 // ---------------------------------------------------------------------------
 
 export const KB: KbEntry[] = [

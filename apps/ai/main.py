@@ -81,7 +81,7 @@ def health() -> dict:
 
 @app.post("/agent")
 def run_agent(req: AgentRequest) -> dict:
-    return agent.run(req.query, req.tags, req.region, req.language, req.extra_context)
+    return agent.run(req.query, req.tags, req.region, _lang(req.language), req.extra_context)
 
 
 @app.post("/retrieve")
@@ -167,8 +167,13 @@ def documents() -> dict:
 
 @app.post("/refresh")
 def refresh(req: RefreshRequest) -> dict:
-    n = crawl_region(req.region, req.lang)
-    return {"ok": True, "pages": n, "region": req.region, "lang": req.lang}
+    lang = _lang(req.lang)
+    n = crawl_region(req.region, lang)
+    return {"ok": True, "pages": n, "region": req.region, "lang": lang}
+
+
+def _lang(value: str) -> str:
+    return "de" if value == "de" else "en"
 
 
 # --------------------------------------------------------------------------- #
@@ -176,7 +181,7 @@ def refresh(req: RefreshRequest) -> dict:
 # --------------------------------------------------------------------------- #
 def _refresh_loop() -> None:
     region = os.getenv("CRAWL_REGION", "bavaria")
-    lang = os.getenv("CRAWL_LANG", "en")
+    lang = _lang(os.getenv("CRAWL_LANG", "en"))
     interval = int(os.getenv("CRAWL_INTERVAL_MIN", "360")) * 60
     if os.getenv("CRAWL_ON_START", "0") == "1":
         crawl_region(region, lang)

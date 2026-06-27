@@ -137,6 +137,8 @@ def diagnostics() -> dict:
         "index": PINECONE_INDEX,
         "cloud": PINECONE_CLOUD,
         "region": PINECONE_REGION,
+        "embedding_provider": embeddings.provider(),
+        "embedding_dim": embeddings.dim(),
         "last_error": _last_error,
     }
 

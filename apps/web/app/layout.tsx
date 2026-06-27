@@ -2,9 +2,9 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Wegweiser — find your way in Germany",
+  title: "Wegweiser AI test console",
   description:
-    "A guided, privacy-first migration assistant. Your journey as a map, not a chatbot. Your data stays on your device.",
+    "A privacy-first migration assistant test console with grounded RAG, citations, and admin document upload.",
 };
 
 export const viewport: Viewport = {

@@ -52,7 +52,7 @@ export default function AdminPage() {
   }
 
   async function onRefresh() {
-    setStatus({ kind: "busy", msg: `Crawling the latest Integreat content for ${region}/${lang}…` });
+    setStatus({ kind: "busy", msg: `Crawling the latest official content for ${region}/${lang}...` });
     try {
       const r = await refreshCrawl(region, lang, token);
       setStatus({ kind: "ok", msg: `Crawled ${r.pages} latest pages for ${region}/${lang}.` });
@@ -106,6 +106,8 @@ export default function AdminPage() {
             <StatusItem label="AI service" value={health.ai?.ok ? "online" : "not reachable"} />
             <StatusItem label="Vector store" value={health.ai?.pinecone?.backend || health.ai?.vector_store || "unknown"} />
             <StatusItem label="Pinecone configured" value={health.ai?.pinecone?.configured ? "yes" : "no"} />
+            <StatusItem label="Embeddings" value={`${health.ai?.pinecone?.embedding_provider || "unknown"} (${health.ai?.pinecone?.embedding_dim || "?"})`} />
+            <StatusItem label="LLM" value={health.ai?.llm?.provider || "unknown"} />
             {health.ai?.pinecone?.last_error && (
               <div className="sm:col-span-2 rounded-lg border border-line bg-paper px-3 py-2 text-rose">
                 Pinecone error: {health.ai.pinecone.last_error}
@@ -152,7 +154,7 @@ export default function AdminPage() {
       <section className="card mb-4 px-4 py-4">
         <h2 className="font-display text-[18px] font-bold text-ink">Always-latest crawl</h2>
         <p className="mt-1 text-[13px] text-muted">
-          Pull the freshest official Integreat content for a region into the vector DB on demand.
+          Pull fresh official migration information into the vector DB on demand. Bavaria/general uses official public sources; city names use Integreat when available.
         </p>
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <div>

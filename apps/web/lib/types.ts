@@ -26,7 +26,7 @@ export interface WalletDoc {
  */
 export interface Wallet {
   profile?: ProfileId;
-  region: string; // Integreat region slug, e.g. "bavaria"
+  region: string; // general/Bavaria or an Integreat region slug, e.g. "augsburg"
   regionLabel: string;
   language: LangCode;
   hasChildren: boolean;
@@ -59,7 +59,7 @@ export interface ActionCard {
 
 export interface Source {
   title: string;
-  origin: "municipality" | "bamf" | "federal" | "integreat" | "web";
+  origin: "municipality" | "bamf" | "federal" | "integreat" | "official-web" | "web" | "source";
   updatedAt: string; // ISO date
   href?: string;
 }

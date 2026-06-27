@@ -1,6 +1,7 @@
-"""Integreat crawler — always fetches the latest content (no caching).
+"""Official-source crawler - always fetches the latest content (no caching).
 
-Integreat exposes a public per-region JSON API:
+General/Bavaria crawl uses configured official public URLs. City/region crawl
+uses Integreat's public per-region JSON API:
     https://cms.integreat-app.de/<region>/<lang>/wp-json/extensions/v3/pages
 
 Crawled pages are written to ./corpus AND upserted into the vector store, so the
@@ -95,6 +96,7 @@ def fetch_url(url: str) -> tuple[str, str]:
 
 
 def crawl_general(lang: str = "en", upsert: bool = True) -> int:
+    lang = "de" if lang == "de" else "en"
     CORPUS.mkdir(exist_ok=True)
     records, written = [], 0
     for url in configured_general_urls(lang):
@@ -126,6 +128,7 @@ def crawl_general(lang: str = "en", upsert: bool = True) -> int:
 
 
 def crawl_region(region: str, lang: str = "en", upsert: bool = True) -> int:
+    lang = "de" if lang == "de" else "en"
     if (region or "").strip().lower() in GENERAL_REGIONS:
         return crawl_general(lang, upsert)
     try:

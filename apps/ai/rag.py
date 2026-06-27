@@ -2,8 +2,8 @@
 
 Default mode is a dependency-free TF-IDF cosine ranker so the service runs
 instantly. An optional embeddings mode (sentence-transformers) can be enabled
-with USE_EMBEDDINGS=1 for higher-quality, multilingual retrieval — the same
-open-weights approach the production system would use over Integreat content.
+with USE_EMBEDDINGS=1 for higher-quality, multilingual retrieval over uploaded
+documents, official web pages, and Integreat content where available.
 """
 from __future__ import annotations
 import math

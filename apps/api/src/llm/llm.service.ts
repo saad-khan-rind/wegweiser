@@ -10,17 +10,16 @@ export interface LlmJson {
 /**
  * One interface, several backends. Order of preference:
  *   1. Ollama (open weights, self-hostable)
- *   2. OpenAI / Anthropic (if a key is provided for the API fallback)
- *   3. null -> caller refuses or composes only from sources
+ *   2. null -> caller refuses or composes only from sources
+ *
+ * Gemini is handled by the Python AI service through apps/ai/.env.
  */
 @Injectable()
 export class LlmService {
   private readonly log = new Logger("LlmService");
 
-  get provider(): "ollama" | "openai" | "anthropic" | "mock" {
+  get provider(): "ollama" | "mock" {
     if (process.env.OLLAMA_URL) return "ollama";
-    if (process.env.OPENAI_API_KEY) return "openai";
-    if (process.env.ANTHROPIC_API_KEY) return "anthropic";
     return "mock";
   }
 
@@ -29,10 +28,6 @@ export class LlmService {
       switch (this.provider) {
         case "ollama":
           return this.parse(await this.ollama(system, user));
-        case "openai":
-          return this.parse(await this.openai(system, user));
-        case "anthropic":
-          return this.parse(await this.anthropic(system, user));
         default:
           return null;
       }
@@ -80,43 +75,4 @@ export class LlmService {
     return data?.message?.content ?? "";
   }
 
-  private async openai(system: string, user: string): Promise<string> {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-      }),
-    });
-    const data = await res.json();
-    return data?.choices?.[0]?.message?.content ?? "";
-  }
-
-  private async anthropic(system: string, user: string): Promise<string> {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY!,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: process.env.ANTHROPIC_MODEL ?? "claude-3-5-sonnet-latest",
-        max_tokens: 700,
-        system,
-        messages: [{ role: "user", content: user }],
-      }),
-    });
-    const data = await res.json();
-    const block = Array.isArray(data?.content) ? data.content.find((c: any) => c.type === "text") : null;
-    return block?.text ?? "";
-  }
 }

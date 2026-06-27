@@ -81,6 +81,14 @@ export function apiConfigured(): boolean {
   return Boolean(apiBase());
 }
 
+export async function getHealth() {
+  const API = apiBase();
+  if (!API) throw new Error("API URL is not configured");
+  const res = await fetch(`${API}/api/health`);
+  if (!res.ok) throw new Error(`Health check failed (${res.status})`);
+  return res.json();
+}
+
 // ---- Admin: document ingestion ------------------------------------------
 export interface IngestMeta {
   title: string;

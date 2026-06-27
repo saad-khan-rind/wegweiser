@@ -12,12 +12,17 @@ import re
 import threading
 import time
 
+from envloader import load_env
+
+load_env()
+
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import agent
 import llm
+import vectorstore
 from vectorstore import get_store
 from crawl import crawl_region
 
@@ -67,6 +72,7 @@ def health() -> dict:
     return {
         "ok": True,
         "vector_store": store.backend,
+        "pinecone": vectorstore.diagnostics(),
         "documents": store.list(1),
         "llm": llm.available(),
         "use_web": os.getenv("AGENT_USE_WEB", "1") == "1",

@@ -6,18 +6,43 @@ Optional dependency: `ddgs` (DuckDuckGo). No API key required.
 """
 from __future__ import annotations
 import logging
+import os
 import re
 import urllib.request
+from urllib.parse import urlparse
+
+from envloader import load_env
+
+load_env()
 
 log = logging.getLogger("web")
 
 UA = "Mozilla/5.0 (compatible; WegweiserBot/0.1)"
+OFFICIAL_HOSTS = (
+    ".bund.de",
+    ".bayern.de",
+    "bayern.de",
+    "bamf.de",
+    "make-it-in-germany.com",
+    "arbeitsagentur.de",
+    "bundesagentur.de",
+    "germany4ukraine.de",
+    "integreat.app",
+    "cms.integreat-app.de",
+)
 
 
 def search(query: str, k: int = 3) -> list[dict]:
     """Return [{title, url, snippet}]. Best effort."""
-    results = _ddg(query, k)
+    results = _ddg(query, max(k * 4, k))
+    if os.getenv("AGENT_OFFICIAL_WEB_ONLY", "1") == "1":
+        results = [r for r in results if is_official_url(r.get("url", ""))]
     return results[:k]
+
+
+def is_official_url(url: str) -> bool:
+    host = urlparse(url).netloc.lower().replace("www.", "")
+    return any(host == h or host.endswith(h) for h in OFFICIAL_HOSTS)
 
 
 def _ddg(query: str, k: int) -> list[dict]:

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { ingestText, ingestFile, listDocuments, refreshCrawl } from "@/lib/api";
+import { ingestText, ingestFile, listDocuments, refreshCrawl, getHealth } from "@/lib/api";
 
 type Status = { kind: "idle" | "ok" | "err" | "busy"; msg: string };
 
@@ -16,6 +16,7 @@ export default function AdminPage() {
   const [lang, setLang] = useState("en");
   const [status, setStatus] = useState<Status>({ kind: "idle", msg: "" });
   const [docs, setDocs] = useState<any[]>([]);
+  const [health, setHealth] = useState<any>(null);
 
   function reset() {
     setTitle(""); setSource(""); setUrl(""); setDate(""); setText(""); setFile(null);
@@ -58,6 +59,17 @@ export default function AdminPage() {
     } catch (e) { setStatus({ kind: "err", msg: (e as Error).message }); }
   }
 
+  async function onHealth() {
+    setStatus({ kind: "busy", msg: "Checking API, AI service, and vector store..." });
+    try {
+      const r = await getHealth();
+      setHealth(r);
+      const pinecone = r.ai?.pinecone;
+      const backend = pinecone?.backend || r.ai?.vector_store || "unknown";
+      setStatus({ kind: "ok", msg: `AI reachable. Vector store: ${backend}.` });
+    } catch (e) { setStatus({ kind: "err", msg: (e as Error).message }); }
+  }
+
   return (
     <div className="mx-auto max-w-2xl px-5 py-8">
       <header className="mb-6">
@@ -76,6 +88,31 @@ export default function AdminPage() {
           placeholder="x-admin-token (leave blank if not configured)"
           className="h-11 w-full rounded-xl border border-line bg-paper px-3 text-[15px] text-ink outline-none focus:border-ink"
         />
+      </section>
+
+      <section className="card mb-4 px-4 py-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="font-display text-[18px] font-bold text-ink">System status</h2>
+            <p className="mt-1 text-[13px] text-muted">
+              Check whether the API, AI service, and Pinecone-backed vector store are connected.
+            </p>
+          </div>
+          <button onClick={onHealth} className="chip shrink-0 px-3 py-1.5 text-[13px]">Check</button>
+        </div>
+        {health && (
+          <dl className="mt-3 grid grid-cols-1 gap-2 text-[13px] sm:grid-cols-2">
+            <StatusItem label="API" value={health.ok ? "online" : "offline"} />
+            <StatusItem label="AI service" value={health.ai?.ok ? "online" : "not reachable"} />
+            <StatusItem label="Vector store" value={health.ai?.pinecone?.backend || health.ai?.vector_store || "unknown"} />
+            <StatusItem label="Pinecone configured" value={health.ai?.pinecone?.configured ? "yes" : "no"} />
+            {health.ai?.pinecone?.last_error && (
+              <div className="sm:col-span-2 rounded-lg border border-line bg-paper px-3 py-2 text-rose">
+                Pinecone error: {health.ai.pinecone.last_error}
+              </div>
+            )}
+          </dl>
+        )}
       </section>
 
       <section className="card mb-4 px-4 py-4">
@@ -183,6 +220,15 @@ function Field({ label, value, set, placeholder }: { label: string; value: strin
         value={value} onChange={(e) => set(e.target.value)} placeholder={placeholder}
         className="h-11 w-full rounded-xl border border-line bg-paper px-3 text-[15px] text-ink outline-none focus:border-ink"
       />
+    </div>
+  );
+}
+
+function StatusItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-line bg-paper px-3 py-2">
+      <dt className="font-mono text-[10px] uppercase tracking-wide text-muted">{label}</dt>
+      <dd className="mt-0.5 font-medium text-ink">{value}</dd>
     </div>
   );
 }

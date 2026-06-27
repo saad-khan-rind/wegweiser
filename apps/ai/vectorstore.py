@@ -12,13 +12,17 @@ import threading
 import time
 
 import embeddings
+from envloader import load_env
 
 log = logging.getLogger("vectorstore")
+
+load_env()
 
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
 PINECONE_INDEX = os.getenv("PINECONE_INDEX", "wegweiser")
 PINECONE_CLOUD = os.getenv("PINECONE_CLOUD", "aws")
 PINECONE_REGION = os.getenv("PINECONE_REGION", "us-east-1")
+_last_error = ""
 
 
 class Record(dict):
@@ -126,6 +130,17 @@ class PineconeStore(BaseStore):
             return []
 
 
+def diagnostics() -> dict:
+    return {
+        "configured": bool(PINECONE_API_KEY),
+        "backend": _store.backend if _store is not None else "not_initialized",
+        "index": PINECONE_INDEX,
+        "cloud": PINECONE_CLOUD,
+        "region": PINECONE_REGION,
+        "last_error": _last_error,
+    }
+
+
 def _cosine(a: list[float], b: list[float]) -> float:
     n = min(len(a), len(b))
     dot = sum(a[i] * b[i] for i in range(n))
@@ -138,6 +153,7 @@ _store: BaseStore | None = None
 
 
 def get_store() -> BaseStore:
+    global _last_error
     global _store
     if _store is not None:
         return _store
@@ -147,6 +163,7 @@ def get_store() -> BaseStore:
             log.info("Vector store: Pinecone (%s)", PINECONE_INDEX)
             return _store
         except Exception as e:  # noqa: BLE001
+            _last_error = str(e)
             log.warning("Pinecone unavailable (%s); using in-memory store", e)
     _store = MemoryStore()
     log.info("Vector store: in-memory")

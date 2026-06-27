@@ -1,16 +1,11 @@
 services:
-  # Added the Ollama service to keep it secure and on the same network
   ollama:
     image: ollama/ollama
     restart: unless-stopped
     volumes:
       - ollama_data:/root/.ollama
-    # Notice there is no 'ports' mapping here. It remains entirely private 
-    # to the Docker network, blocking outside internet access.
 
   ai:
-    build: ./apps/api
-    # (Assuming ai folder builds python correctly, adjust path if needed to ./apps/ai)
     build: ./apps/ai
     ports: ["3002:3002"]
     environment:
@@ -21,22 +16,24 @@ services:
     ports: ["3001:3001"]
     environment:
       - PORT=3001
-      - WEB_ORIGIN=http://204.168.210.222:3000   # Changed from localhost
+      - WEB_ORIGIN=http://204.168.210.222:3000
       - AI_SERVICE_URL=http://ai:3002
       - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
       - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-    depends_on: [ai, ollama]
+    depends_on:
+      - ai
+      - ollama
 
   web:
     build: ./apps/web
     ports: ["3000:3000"]
     environment:
-      - NEXT_PUBLIC_API_URL=http://204.168.210.222:3001 # Changed from localhost
-    depends_on: [api]
+      - NEXT_PUBLIC_API_URL=http://204.168.210.222:3001
+    depends_on:
+      - api
 
-# Declare the existing named volume so Docker Compose can attach to it
 volumes:
   ollama_data:
     external: true

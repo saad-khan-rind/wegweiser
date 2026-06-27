@@ -1,0 +1,127 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink: #16243b;
+  --paper: #f5f3ec;
+  --card: #ffffff;
+  --signal: #95c11f; /* Tür an Tür lime, used only for "you are here" + actions */
+  --amber: #eb9d3e;
+  --teal: #2c8c86;
+  --rose: #d4685a;
+  --muted: #5b6573;
+  --line: #e4dfd2;
+
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle "map paper" grid, very low contrast — the wayfinding signature. */
+body {
+  background-image:
+    linear-gradient(to right, rgba(22, 36, 59, 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(22, 36, 59, 0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+.font-mono {
+  font-family: var(--font-mono);
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 1.1rem;
+  box-shadow: 0 1px 0 rgba(22, 36, 59, 0.04), 0 10px 30px -22px rgba(22, 36, 59, 0.4);
+}
+
+.chip {
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  border-radius: 999px;
+  transition: transform 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+.chip:active {
+  transform: scale(0.97);
+}
+.chip[data-on="true"] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.btn {
+  border-radius: 0.85rem;
+  font-weight: 600;
+  transition: transform 0.1s ease, filter 0.15s ease;
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn-primary {
+  background: var(--ink);
+  color: var(--paper);
+}
+.btn-signal {
+  background: var(--signal);
+  color: #14210a;
+}
+.btn-ghost {
+  background: transparent;
+  border: 1.5px solid var(--line);
+  color: var(--ink);
+}
+
+/* line colors for the transit map */
+.line-core {
+  --c: var(--ink);
+}
+.line-asylum {
+  --c: var(--teal);
+}
+.line-student {
+  --c: var(--amber);
+}
+.line-work {
+  --c: #3f7fd4;
+}
+.line-family {
+  --c: var(--rose);
+}
+
+:focus-visible {
+  outline: 3px solid var(--signal);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+[dir="rtl"] {
+  text-align: right;
+}

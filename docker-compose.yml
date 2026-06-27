@@ -1,0 +1,30 @@
+# One command to run the whole stack: docker compose up --build
+# The web app falls back to its on-device engine if the API is down, so the
+# demo never breaks — but with these services up you get the real RAG + LLM.
+services:
+  ai:
+    build: ./apps/ai
+    ports: ["3002:3002"]
+    environment:
+      - USE_EMBEDDINGS=0          # set to 1 for multilingual embeddings (heavier)
+
+  api:
+    build: ./apps/api
+    ports: ["3001:3001"]
+    environment:
+      - PORT=3001
+      - WEB_ORIGIN=http://localhost:3000
+      - AI_SERVICE_URL=http://ai:3002
+      # --- choose an LLM, or leave blank for grounded mock answers ---
+      - OLLAMA_URL=${OLLAMA_URL:-}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    depends_on: [ai]
+
+  web:
+    build: ./apps/web
+    ports: ["3000:3000"]
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+    depends_on: [api]

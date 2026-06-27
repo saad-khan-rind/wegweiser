@@ -1,0 +1,66 @@
+[
+  {
+    "id": "anmeldung",
+    "title": "Registering your address (Anmeldung)",
+    "origin": "municipality",
+    "updatedAt": "2026-06-12",
+    "tags": ["topic:registration"],
+    "text": "Within 14 days of moving into a home in Germany you must register your address at the local Bürgeramt (registration office). You need your passport or ID, a landlord confirmation (Wohnungsgeberbestätigung) and usually your rental contract. After registering you receive a registration certificate (Meldebescheinigung) that is required to open a bank account, receive your tax ID and many other steps. Book an appointment in advance because slots fill quickly."
+  },
+  {
+    "id": "health",
+    "title": "Health insurance basics",
+    "origin": "integreat",
+    "updatedAt": "2026-06-01",
+    "tags": ["topic:health"],
+    "text": "Health insurance is mandatory for everyone living in Germany. Most newcomers join a public health insurer (gesetzliche Krankenkasse). After you choose an insurer and submit the membership form, you receive an insurance card that you present at every doctor and pharmacy. Some groups, such as the self-employed or high earners, may choose private insurance, but public insurance is the simplest starting point for most people."
+  },
+  {
+    "id": "work",
+    "title": "Access to the labour market by residence status",
+    "origin": "federal",
+    "updatedAt": "2026-06-18",
+    "tags": ["topic:work"],
+    "text": "Whether you are allowed to work in Germany depends on your residence status and how long you have been in the country. Permission to work is recorded in your residence document by the Ausländerbehörde (immigration office). Asylum seekers may be allowed to work after a waiting period; recognised refugees and many permit holders may work without restriction. Rules have changed recently, so always check the current date on the official source or ask a counselor if your case is unclear."
+  },
+  {
+    "id": "kindergeld",
+    "title": "Child benefit (Kindergeld)",
+    "origin": "federal",
+    "updatedAt": "2026-06-10",
+    "tags": ["topic:family", "family:has_children"],
+    "text": "Families raising children in Germany can receive a monthly child benefit called Kindergeld. You apply at the Familienkasse with your children's birth certificates, your tax ID and your residence document. Payment can often be backdated for several months, so it is worth applying as soon as possible after you arrive and register."
+  },
+  {
+    "id": "residence",
+    "title": "Residence permits overview",
+    "origin": "bamf",
+    "updatedAt": "2026-06-20",
+    "tags": ["topic:residence"],
+    "text": "A residence permit (Aufenthaltstitel) determines how long you may stay in Germany and whether you may work or study. Permits must be renewed before they expire at the Ausländerbehörde. Typical documents include a valid passport, a biometric photo, proof of health insurance and proof of income or enrolment. Appointment slots are limited, so book your renewal well in advance of the expiry date."
+  },
+  {
+    "id": "integration",
+    "title": "Integration and language courses",
+    "origin": "bamf",
+    "updatedAt": "2026-06-05",
+    "tags": ["topic:language"],
+    "text": "An integration course combines German language lessons with an orientation course about life in Germany. Depending on your residence status the course may be free or low-cost. Completing a course can help with later steps such as finding work and applying for permanent residence. A local course provider can confirm whether you are entitled to a place."
+  },
+  {
+    "id": "bank",
+    "title": "Opening a bank account",
+    "origin": "federal",
+    "updatedAt": "2025-12-09",
+    "tags": ["topic:money"],
+    "text": "A current account (Girokonto) is needed to receive a salary and pay rent in Germany. Everyone has the right to a basic account (Basiskonto), which banks must offer even to people with limited documents. To open an account you usually need your passport, your registration certificate and your tax ID, and you verify your identity in branch or online."
+  },
+  {
+    "id": "asylum",
+    "title": "The asylum procedure",
+    "origin": "bamf",
+    "updatedAt": "2026-06-22",
+    "tags": ["topic:asylum", "status:asylum"],
+    "text": "People seeking protection first report as asylum seekers and then lodge a formal application at a branch of the Federal Office for Migration and Refugees (BAMF). You receive an arrival certificate (Ankunftsnachweis) and later an invitation to a personal interview, which is the most important step. You have the right to an interpreter, and independent counseling services can help you prepare your account."
+  }
+]

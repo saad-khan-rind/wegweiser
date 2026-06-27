@@ -30,7 +30,7 @@ services:
     build: ./apps/web
     ports: ["3000:3000"]
     environment:
-      - NEXT_PUBLIC_API_URL=http://204.168.210.222:3001
+      - NEXT_PUBLIC_API_URL=http://204.168.210.222:3002
     depends_on:
       - api
 

@@ -1,20 +1,15 @@
 # Wegweiser — full stack for a self-hosted server.
-#   docker compose up --build
-#
-# The web app reads its API URL at RUNTIME (no rebuild needed). Set API_URL to a
-# browser-reachable address (your server's public IP), NOT an internal docker
-# hostname. ollama:11434 is only reachable *between* containers.
+# docker compose up --build
 services:
   ollama:
     image: ollama/ollama:latest
-    ports: ["11434:11434"]
+    restart: unless-stopped
+    # ports: ["11434:11434"] # WARNING: Uncommenting this exposes your LLM to the public internet.
     volumes: ["ollama:/root/.ollama"]
-    # After first start, pull the models (see RUNBOOK.md):
-    #   docker compose exec ollama ollama pull llama3.1:8b
-    #   docker compose exec ollama ollama pull nomic-embed-text
 
   ai:
     build: ./apps/ai
+    ports: ["4002:3002"] # Added external port 4002 for the AI service
     environment:
       - OLLAMA_URL=http://ollama:11434
       - OLLAMA_MODEL=llama3.1:8b
@@ -35,10 +30,10 @@ services:
 
   api:
     build: ./apps/api
-    ports: ["3001:3001"]
+    ports: ["4001:3001"] # Mapped external port 4001 to internal port 3001
     environment:
       - PORT=3001
-      - WEB_ORIGIN=http://204.168.210.222:4000
+      - WEB_ORIGIN=http://204.168.210.222:4000 # Must match frontend port for CORS
       - AI_SERVICE_URL=http://ai:3002
       - AGENT_TIMEOUT_MS=200000
       - ADMIN_TOKEN=${ADMIN_TOKEN:-change-me}
@@ -46,10 +41,10 @@ services:
 
   web:
     build: ./apps/web
-    ports: ["4000:3000"]
+    ports: ["4000:3000"] # Mapped external port 4000 to internal port 3000
     environment:
       # MUST be reachable from the user's browser (public IP), not localhost:
-      - API_URL=http://204.168.210.222:4000
+      - API_URL=http://204.168.210.222:4001 # FIXED: Points to API port 4001
       - WEB_TIMEOUT_MS=200000
       - PORT=3000
     depends_on: [api]

@@ -135,22 +135,6 @@ export async function refreshCrawl(region: string, lang: string, token: string) 
   return res.json();
 }
 
-export async function getLlmConfig(token: string) {
-  const res = await fetch(`${apiBase()}/api/admin/llm-config`, { headers: { ...adminHeaders(token) } });
-  if (!res.ok) throw new Error(`Config check failed (${res.status})`);
-  return res.json();
-}
-
-export async function setGeminiConfig(apiKey: string, token: string) {
-  const res = await fetch(`${apiBase()}/api/admin/llm-config`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...adminHeaders(token) },
-    body: JSON.stringify({ geminiApiKey: apiKey }),
-  });
-  if (!res.ok) throw new Error(`Config update failed (${res.status})`);
-  return res.json();
-}
-
 function unavailableAnswer(cleaned: string, tags: string[], lang: Wallet["language"]): AnswerResult {
   const isDe = lang === "de";
   return {

@@ -122,28 +122,24 @@ VERIFY_SYS = (
 )
 
 
-def _draft(goal: str, tags: list[str], sources: list[dict], language: str,
-           gemini_api_key: str = "", gemini_model: str = "") -> dict | None:
+def _draft(goal: str, tags: list[str], sources: list[dict], language: str) -> dict | None:
     user = (f"User goal: {goal}\nAnswer language: {language}\nKnown context tags: {', '.join(tags) or 'none'}\n\n"
             f"Sources:\n{_source_block(sources)}")
-    return llm.chat_json(_draft_system(language), user, temperature=0.1,
-                         gemini_api_key=gemini_api_key, gemini_model=gemini_model)
+    return llm.chat_json(_draft_system(language), user, temperature=0.1)
 
 
-def _verify(goal: str, draft: dict, sources: list[dict], language: str,
-            gemini_api_key: str = "", gemini_model: str = "") -> dict | None:
+def _verify(goal: str, draft: dict, sources: list[dict], language: str) -> dict | None:
     user = (f"User goal: {goal}\n\nDraft answer: {draft.get('answer','')}\n"
             f"Draft assumptions: {draft.get('assumptions', [])}\n\n"
             f"Answer language: {language}\nSources:\n{_source_block(sources)}")
-    return llm.chat_json(VERIFY_SYS, user, temperature=0.0,
-                         gemini_api_key=gemini_api_key, gemini_model=gemini_model)
+    return llm.chat_json(VERIFY_SYS, user, temperature=0.0)
 
 
 # --------------------------------------------------------------------------- #
 # Public entry
 # --------------------------------------------------------------------------- #
 def run(query: str, tags: list[str], region: str = "", language: str = "en",
-        extra_context: str = "", gemini_api_key: str = "", gemini_model: str = "") -> dict:
+        extra_context: str = "") -> dict:
     answer_language = _detect_language(query, language)
     goal = query if not extra_context else f"{query}\nAdditional info from user: {extra_context}"
     trace: list[str] = []
@@ -156,10 +152,10 @@ def run(query: str, tags: list[str], region: str = "", language: str = "en",
     if not sources:
         return _not_enough_info(answer_language, [], trace, confidence=0.2)
 
-    if not llm.available(gemini_api_key, gemini_model).get("reachable"):
+    if not llm.available().get("reachable"):
         return _grounded_fallback(sources, "LLM unreachable", trace, answer_language)
 
-    draft = _draft(goal, tags, sources, answer_language, gemini_api_key, gemini_model)
+    draft = _draft(goal, tags, sources, answer_language)
     if not draft or not draft.get("answer"):
         return _grounded_fallback(sources, "draft failed", trace, answer_language)
     trace.append("Drafted an answer with citations")
@@ -172,7 +168,7 @@ def run(query: str, tags: list[str], region: str = "", language: str = "en",
     for it in range(MAX_ITERS + 1):
         verdict = _verify(
             goal, {"answer": answer, "assumptions": draft.get("assumptions", [])},
-            sources, answer_language, gemini_api_key, gemini_model,
+            sources, answer_language,
         )
         if not verdict:
             break
@@ -195,7 +191,7 @@ def run(query: str, tags: list[str], region: str = "", language: str = "en",
             more = gather_sources(verdict["refined_query"], tags, region=region, language=answer_language)
             sources = _dedupe(sources + more)
             trace.append(f"Improved context with: '{verdict['refined_query']}'")
-            draft = _draft(goal, tags, sources, answer_language, gemini_api_key, gemini_model) or draft
+            draft = _draft(goal, tags, sources, answer_language) or draft
             answer = draft.get("answer", answer)
             used = draft.get("used", used)
             continue

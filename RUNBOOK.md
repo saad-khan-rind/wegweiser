@@ -28,6 +28,8 @@ to your public IP**, not `localhost` or `http://ollama`.
 # 1) optional: secrets/keys
 export ADMIN_TOKEN=some-long-secret
 export PINECONE_API_KEY=...        # omit to use the built-in in-memory store
+# Optional: set this in apps/ai/.env to use Gemini Flash instead of Ollama
+# GEMINI_API_KEY=...
 
 # 2) build + start everything
 docker compose up --build -d
@@ -41,8 +43,10 @@ curl http://204.168.210.222:3001/api/health
 ```
 
 Open `http://204.168.210.222:4000`. Admin page: `http://204.168.210.222:4000/admin/`.
-From admin you can save a Gemini API key to use `gemini-flash-latest`; clear it
-to return to the current Ollama setup.
+To use Gemini, set `GEMINI_API_KEY` in the AI service env (`apps/ai/.env` or
+your AI container environment). Leave it empty to use the current Ollama setup.
+The AI service loads `apps/ai/.env` itself and does not require a frontend/admin
+key setting.
 
 `docker-compose.yml` already sets your env: `WEB_ORIGIN=http://204.168.210.222:4000`,
 `OLLAMA_URL=http://ollama:11434`, `API_URL=http://204.168.210.222:3001`, web on 4000.

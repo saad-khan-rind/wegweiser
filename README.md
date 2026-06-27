@@ -30,8 +30,8 @@ ever leave the phone — and the app shows you exactly what those are.
 
 | Path | Stack | Role |
 |------|-------|------|
-| `apps/web` | Next.js 14 (static export), TypeScript, Tailwind | The product UI, admin upload/config screen, and privacy receipt. |
-| `apps/api` | NestJS 10 | Orchestration: server-side de-identification, admin guard, runtime Gemini key, retrieval, LLM composition. |
+| `apps/web` | Next.js 14 (static export), TypeScript, Tailwind | The product UI, admin upload screen, and privacy receipt. |
+| `apps/api` | NestJS 10 | Orchestration: server-side de-identification, admin guard, retrieval, LLM composition fallback. |
 | `apps/ai` | FastAPI (Python) | Goal-based, self-verifying RAG over uploaded docs, Integreat content, and optional live web. Includes an Integreat crawler. |
 
 The services are layered with **safe fallback**, so the app never invents an answer:
@@ -63,6 +63,7 @@ This shows the UI. Real answers require the API and AI service.
 ```bash
 # from the repo root
 cp apps/api/.env.example apps/api/.env   # optionally add an LLM key / Ollama URL
+cp apps/ai/.env.example apps/ai/.env     # optionally set GEMINI_API_KEY here
 docker compose up --build
 # web  http://localhost:3000
 # api  http://localhost:3001/api/health
@@ -71,8 +72,9 @@ docker compose up --build
 
 Open-weights by default: point `OLLAMA_URL` at a running [Ollama](https://ollama.com)
 (`ollama run llama3.1:8b`) and everything stays self-hosted. To use Gemini
-instead, open `/admin`, enter the admin token, and save a Gemini API key; the app
-then uses `gemini-flash-latest`. Clearing the key returns to Ollama.
+instead, set `GEMINI_API_KEY` in `apps/ai/.env` (see `apps/ai/.env.example`).
+When that key is present, the AI service uses `gemini-flash-latest`; when it is
+empty, it uses Ollama.
 
 ### Pull real Integreat content (optional)
 
@@ -100,7 +102,7 @@ served by the `web` container, and `/admin/` is exported as its own static route
 - **Data minimization → on device** → the wallet never leaves the phone; only
   de-identified queries + opaque tags are sent, and the app shows them to the user.
 - **Open source / open weights / self-hostable** → Ollama by default, optional
-  Gemini Flash through the protected admin config, local RAG, static frontend.
+  Gemini Flash through the AI service env, local RAG, static frontend.
 
 See `docs/ARCHITECTURE.md`, `docs/DATA_MINIMIZATION.md`, and `docs/PITCH.md`.
 

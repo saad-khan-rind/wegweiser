@@ -11,8 +11,36 @@ import os
 import urllib.request
 import urllib.error
 import urllib.parse
+from pathlib import Path
 
 log = logging.getLogger("ollama")
+
+
+def _load_local_env() -> None:
+    path = Path(__file__).with_name(".env")
+    if not path.exists():
+        return
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+        os.environ[key] = _clean_env_value(value)
+
+
+def _clean_env_value(value: str) -> str:
+    value = value.strip()
+    if not value:
+        return ""
+    if value[0] in {"'", '"'} and value.endswith(value[0]):
+        return value[1:-1]
+    return value.split("#", 1)[0].strip()
+
+
+_load_local_env()
 
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434").rstrip("/")
 CHAT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
@@ -34,21 +62,21 @@ def _post(path: str, payload: dict, timeout: int) -> dict:
         return json.loads(r.read().decode("utf-8"))
 
 
-def _gemini_key(runtime_key: str = "") -> str:
-    return (runtime_key or os.getenv("GEMINI_API_KEY", "")).strip()
+def _gemini_key() -> str:
+    return os.getenv("GEMINI_API_KEY", "").strip()
 
 
-def _provider(runtime_key: str = "") -> str:
-    return "gemini" if _gemini_key(runtime_key) else "ollama"
+def _provider() -> str:
+    return "gemini" if _gemini_key() else "ollama"
 
 
-def available(gemini_api_key: str = "", gemini_model: str = "") -> dict:
+def available() -> dict:
     """Health probe for the active provider. Gemini is used when a key exists."""
-    if _gemini_key(gemini_api_key):
+    if _gemini_key():
         return {
             "reachable": True,
             "provider": "gemini",
-            "chat_model": gemini_model or GEMINI_MODEL,
+            "chat_model": GEMINI_MODEL,
             "chat_model_present": True,
             "embed_model": EMBED_MODEL,
             "embed_model_present": False,
@@ -71,13 +99,12 @@ def available(gemini_api_key: str = "", gemini_model: str = "") -> dict:
     return info
 
 
-def chat_json(system: str, user: str, temperature: float = 0.1,
-              gemini_api_key: str = "", gemini_model: str = "") -> dict | None:
+def chat_json(system: str, user: str, temperature: float = 0.1) -> dict | None:
     """Ask the model for a strict JSON object. Returns parsed dict or None."""
-    provider = _provider(gemini_api_key)
+    provider = _provider()
     try:
         if provider == "gemini":
-            return _parse_json(_gemini(system, user, temperature, gemini_api_key, gemini_model))
+            return _parse_json(_gemini(system, user, temperature))
         data = _post("/api/chat", {
             "model": CHAT_MODEL,
             "stream": False,
@@ -98,9 +125,9 @@ def chat_json(system: str, user: str, temperature: float = 0.1,
         return None
 
 
-def _gemini(system: str, user: str, temperature: float, gemini_api_key: str, gemini_model: str) -> str:
-    key = urllib.parse.quote(_gemini_key(gemini_api_key), safe="")
-    model = urllib.parse.quote(gemini_model or GEMINI_MODEL, safe="")
+def _gemini(system: str, user: str, temperature: float) -> str:
+    key = urllib.parse.quote(_gemini_key(), safe="")
+    model = urllib.parse.quote(GEMINI_MODEL, safe="")
     payload = {
         "systemInstruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": user}]}],

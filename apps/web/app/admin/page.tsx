@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { ingestText, ingestFile, listDocuments, refreshCrawl, getLlmConfig, setGeminiConfig } from "@/lib/api";
+import { ingestText, ingestFile, listDocuments, refreshCrawl } from "@/lib/api";
 
 type Status = { kind: "idle" | "ok" | "err" | "busy"; msg: string };
 
@@ -14,8 +14,6 @@ export default function AdminPage() {
   const [file, setFile] = useState<File | null>(null);
   const [region, setRegion] = useState("bavaria");
   const [lang, setLang] = useState("en");
-  const [geminiKey, setGeminiKey] = useState("");
-  const [llmStatus, setLlmStatus] = useState<{ provider?: string; model?: string; geminiConfigured?: boolean }>({});
   const [status, setStatus] = useState<Status>({ kind: "idle", msg: "" });
   const [docs, setDocs] = useState<any[]>([]);
 
@@ -57,35 +55,6 @@ export default function AdminPage() {
     try {
       const r = await refreshCrawl(region, lang, token);
       setStatus({ kind: "ok", msg: `Crawled ${r.pages} latest pages for ${region}/${lang}.` });
-    } catch (e) { setStatus({ kind: "err", msg: (e as Error).message }); }
-  }
-
-  async function onConfigCheck() {
-    setStatus({ kind: "busy", msg: "Checking AI provider configuration..." });
-    try {
-      const r = await getLlmConfig(token);
-      setLlmStatus(r);
-      setStatus({ kind: "ok", msg: `AI provider: ${r.provider}${r.model ? ` (${r.model})` : ""}.` });
-    } catch (e) { setStatus({ kind: "err", msg: (e as Error).message }); }
-  }
-
-  async function onSaveGemini() {
-    setStatus({ kind: "busy", msg: geminiKey.trim() ? "Saving Gemini key..." : "Clearing Gemini key..." });
-    try {
-      const r = await setGeminiConfig(geminiKey.trim(), token);
-      setLlmStatus(r);
-      setGeminiKey("");
-      setStatus({ kind: "ok", msg: `AI provider: ${r.provider}${r.model ? ` (${r.model})` : ""}.` });
-    } catch (e) { setStatus({ kind: "err", msg: (e as Error).message }); }
-  }
-
-  async function onClearGemini() {
-    setStatus({ kind: "busy", msg: "Clearing Gemini key..." });
-    try {
-      const r = await setGeminiConfig("", token);
-      setLlmStatus(r);
-      setGeminiKey("");
-      setStatus({ kind: "ok", msg: `AI provider: ${r.provider}${r.model ? ` (${r.model})` : ""}.` });
     } catch (e) { setStatus({ kind: "err", msg: (e as Error).message }); }
   }
 
@@ -164,36 +133,6 @@ export default function AdminPage() {
           </div>
           <button onClick={onRefresh} className="btn btn-primary h-10 px-4 text-[14px]">Crawl latest</button>
         </div>
-      </section>
-
-      <section className="card mb-4 px-4 py-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h2 className="font-display text-[18px] font-bold text-ink">AI provider</h2>
-            <p className="mt-1 text-[13px] text-muted">
-              Add a Gemini API key to use the latest Flash model. Leave it empty to use the current Ollama setup.
-            </p>
-          </div>
-          <button onClick={onConfigCheck} className="chip shrink-0 px-3 py-1.5 text-[13px]">Check</button>
-        </div>
-        <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
-          <input
-            value={geminiKey}
-            onChange={(e) => setGeminiKey(e.target.value)}
-            type="password"
-            placeholder="Gemini API key"
-            className="h-11 rounded-xl border border-line bg-paper px-3 text-[15px] text-ink outline-none focus:border-ink"
-          />
-          <button onClick={onSaveGemini} className="btn btn-signal h-11 px-4 text-[14px]">Save key</button>
-        </div>
-        <button onClick={onClearGemini} className="mt-2 text-[12px] text-muted underline">
-          Clear Gemini key and use Ollama
-        </button>
-        {(llmStatus.provider || llmStatus.model) && (
-          <p className="mt-2 text-[12px] text-muted">
-            Current provider: {llmStatus.provider || "unknown"}{llmStatus.model ? ` · ${llmStatus.model}` : ""}
-          </p>
-        )}
       </section>
 
       <section className="card px-4 py-4">

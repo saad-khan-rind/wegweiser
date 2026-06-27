@@ -37,8 +37,6 @@ class AgentRequest(BaseModel):
     region: str = ""
     language: str = "en"
     extra_context: str = ""
-    gemini_api_key: str = ""
-    gemini_model: str = ""
 
 
 class RetrieveRequest(BaseModel):
@@ -77,10 +75,7 @@ def health() -> dict:
 
 @app.post("/agent")
 def run_agent(req: AgentRequest) -> dict:
-    return agent.run(
-        req.query, req.tags, req.region, req.language, req.extra_context,
-        req.gemini_api_key, req.gemini_model,
-    )
+    return agent.run(req.query, req.tags, req.region, req.language, req.extra_context)
 
 
 @app.post("/retrieve")

@@ -1,7 +1,6 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { KnowledgeService, Doc } from "../knowledge/knowledge.service";
 import { LlmService } from "../llm/llm.service";
-import { AiConfigService } from "../llm/ai-config.service";
 import { deidentify, sanitizeTags } from "../common/deidentify";
 
 export interface ChatRequest {
@@ -41,7 +40,6 @@ export class ChatService {
   constructor(
     private readonly knowledge: KnowledgeService,
     private readonly llm: LlmService,
-    private readonly aiConfig: AiConfigService,
   ) {}
 
   async chat(req: ChatRequest): Promise<ChatResponse> {
@@ -78,8 +76,6 @@ export class ChatService {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query, tags, region, language, extra_context: extraContext,
-          gemini_api_key: this.aiConfig.geminiApiKey,
-          gemini_model: this.aiConfig.geminiModel,
         }),
         signal: ctrl.signal,
       });

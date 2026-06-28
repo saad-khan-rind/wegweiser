@@ -160,11 +160,11 @@ export async function clearDocuments(token: string) {
   return res.json();
 }
 
-export async function refreshCrawl(region: string, lang: string, token: string) {
+export async function refreshCrawl(region: string, lang: string, token: string, url = "") {
   const res = await fetch(`${apiBase()}/api/admin/refresh`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...adminHeaders(token) },
-    body: JSON.stringify({ region, lang }),
+    body: JSON.stringify({ region, lang, url }),
   });
   if (!res.ok) throw new Error(`Refresh failed (${res.status})`);
   return res.json();

@@ -71,12 +71,28 @@ def page_title(html: str, fallback: str) -> str:
 
 def fetch_pages(region: str, lang: str) -> list[dict]:
     url = f"https://cms.integreat-app.de/{region}/{lang}/wp-json/extensions/v3/pages"
+    return fetch_pages_url(url)
+
+
+def fetch_pages_url(url: str) -> list[dict]:
     # Cache-busting + no-cache headers guarantee the freshest content every run.
     req = urllib.request.Request(url, headers={
         "User-Agent": UA, "Cache-Control": "no-cache, no-store", "Pragma": "no-cache",
     })
     with urllib.request.urlopen(req, timeout=40) as r:
         return json.load(r)
+
+
+def parse_integreat_api_url(url: str) -> tuple[str, str]:
+    parsed = urlparse(url)
+    parts = [p for p in parsed.path.split("/") if p]
+    try:
+        marker = parts.index("wp-json")
+    except ValueError:
+        marker = -1
+    if marker < 2 or len(parts) < marker + 4 or parts[marker + 1:marker + 4] != ["extensions", "v3", "pages"]:
+        raise ValueError("URL must look like https://cms.integreat-app.de/<region>/<lang>/wp-json/extensions/v3/pages/")
+    return parts[marker - 2], parts[marker - 1]
 
 
 def configured_general_urls(lang: str) -> list[str]:
@@ -129,6 +145,8 @@ def crawl_general(lang: str = "en", upsert: bool = True) -> int:
 
 def crawl_region(region: str, lang: str = "en", upsert: bool = True) -> int:
     lang = "de" if lang == "de" else "en"
+    if (region or "").startswith("http"):
+        return crawl_integreat_api_url(region, upsert=upsert)["pages"]
     if (region or "").strip().lower() in GENERAL_REGIONS:
         return crawl_general(lang, upsert)
     try:
@@ -163,6 +181,98 @@ def crawl_region(region: str, lang: str = "en", upsert: bool = True) -> int:
             log.warning("vector upsert failed: %s", e)
     log.info("Crawled %s pages for %s/%s", written, region, lang)
     return written
+
+
+def crawl_integreat_api_url(api_url: str, upsert: bool = True) -> dict:
+    region, lang = parse_integreat_api_url(api_url)
+    pages = fetch_pages_url(api_url)
+    records = structured_integreat_records(pages, region, lang, api_url)
+    CORPUS.mkdir(exist_ok=True)
+    for r in records:
+        md = r["metadata"]
+        corpus_id = r["id"]
+        (CORPUS / f"{corpus_id}.md").write_text(
+            f"---\nid: {corpus_id}\ntitle: {md['title']}\norigin: integreat-api\n"
+            f"updated_at: {md.get('date', '')}\nurl: {md.get('url', '')}\n"
+            f"tags: region:{region}, lang:{lang}, source:integreat-api\n---\n{r['text']}\n",
+            encoding="utf-8",
+        )
+    if upsert and records:
+        try:
+            from vectorstore import get_store
+            get_store().upsert(records)
+            log.info("Upserted %s structured Integreat API pages into the vector store", len(records))
+        except Exception as e:  # noqa: BLE001
+            log.warning("vector upsert failed: %s", e)
+            raise
+    log.info("Imported %s structured Integreat API pages for %s/%s", len(records), region, lang)
+    return {"ok": True, "pages": len(records), "region": region, "lang": lang, "url": api_url}
+
+
+def structured_integreat_records(pages: list[dict], region: str, lang: str, api_url: str) -> list[dict]:
+    by_id = {int(p.get("id", 0)): p for p in pages if p.get("id")}
+    records: list[dict] = []
+    for p in pages:
+        title = (p.get("title") or "").strip()
+        page_id = str(p.get("id") or slugify(title))
+        if not title:
+            continue
+        content = strip_html(p.get("content", ""))
+        excerpt = strip_html(p.get("excerpt", ""))
+        parent = p.get("parent") or {}
+        parent_id = int(parent.get("id") or 0)
+        parent_title = (by_id.get(parent_id) or {}).get("title", "") if parent_id else ""
+        path = p.get("path") or ""
+        admin_url = p.get("url") or ""
+        public_url = _public_integreat_url(region, lang, path)
+        modified = (p.get("modified_gmt") or p.get("last_updated") or "")[:10]
+        languages = sorted((p.get("available_languages") or {}).keys())
+        sid = f"integreat-{region}-{lang}-{page_id}"
+        text = "\n".join([
+            f"title: {title}",
+            f"region: {region}",
+            f"language: {lang}",
+            f"path: {path}",
+            f"parent: {parent_title or parent_id or 'root'}",
+            f"order: {p.get('order', '')}",
+            f"modified: {modified}",
+            f"available_languages: {', '.join(languages)}",
+            f"public_url: {public_url}",
+            f"admin_url: {admin_url}",
+            f"excerpt: {excerpt}",
+            f"content: {content}",
+        ]).strip()
+        records.append({
+            "id": sid,
+            "text": text[:12000],
+            "metadata": {
+                "id": sid,
+                "title": title,
+                "source": "integreat-api",
+                "source_type": "integreat_api",
+                "integreat_id": page_id,
+                "region": region,
+                "lang": lang,
+                "path": path,
+                "parent_id": parent_id,
+                "parent_title": str(parent_title),
+                "order": int(p.get("order") or 0),
+                "url": public_url or admin_url,
+                "admin_url": admin_url,
+                "api_url": api_url,
+                "date": modified,
+                "available_languages": ",".join(languages),
+                "has_content": bool(content),
+            },
+        })
+    return records
+
+
+def _public_integreat_url(region: str, lang: str, path: str) -> str:
+    clean = (path or "").strip("/")
+    if not clean:
+        return f"https://integreat.app/{region}/{lang}"
+    return f"https://integreat.app/{clean}"
 
 
 if __name__ == "__main__":

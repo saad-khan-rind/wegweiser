@@ -98,7 +98,7 @@ export class ChatService {
         title: c.title,
         origin: c.source ?? "source",
         updatedAt: c.date ?? "",
-        url: c.url || (c.id ? `/api/source/${encodeURIComponent(c.id)}` : ""),
+        url: c.source_type === "integreat_api" && c.id ? `/api/source/${encodeURIComponent(c.id)}` : c.url || (c.id ? `/api/source/${encodeURIComponent(c.id)}` : ""),
         relevance: c.relevance,
         accepted: true,
       }));
@@ -107,7 +107,7 @@ export class ChatService {
         title: r.title,
         origin: r.source ?? r.origin ?? "source",
         updatedAt: r.date ?? "",
-        url: r.url || (r.id ? `/api/source/${encodeURIComponent(r.id)}` : ""),
+        url: r.source_type === "integreat_api" && r.id ? `/api/source/${encodeURIComponent(r.id)}` : r.url || (r.id ? `/api/source/${encodeURIComponent(r.id)}` : ""),
         relevance: r.relevance,
         accepted: Boolean(r.accepted),
         excerpt: r.excerpt ?? "",

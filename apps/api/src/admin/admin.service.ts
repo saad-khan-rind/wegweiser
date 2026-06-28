@@ -45,11 +45,11 @@ export class AdminService {
     return res.json();
   }
 
-  async refresh(body: { region?: string; lang?: string }) {
+  async refresh(body: { region?: string; lang?: string; url?: string }) {
     const res = await fetch(`${aiUrl()}/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ region: body.region ?? "bavaria", lang: body.lang ?? "en" }),
+      body: JSON.stringify({ region: body.region ?? "bavaria", lang: body.lang ?? "en", url: body.url ?? "" }),
     });
     if (!res.ok) throw new ServiceUnavailableException(`refresh failed (${res.status})`);
     return res.json();

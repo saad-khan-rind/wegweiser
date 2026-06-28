@@ -14,6 +14,7 @@ export default function AdminPage() {
   const [file, setFile] = useState<File | null>(null);
   const [region, setRegion] = useState("bavaria");
   const [lang, setLang] = useState("en");
+  const [apiUrl, setApiUrl] = useState("https://cms.integreat-app.de/testumgebung-frag-integreat/de/wp-json/extensions/v3/pages/");
   const [status, setStatus] = useState<Status>({ kind: "idle", msg: "" });
   const [docs, setDocs] = useState<any[]>([]);
   const [health, setHealth] = useState<any>(null);
@@ -52,10 +53,11 @@ export default function AdminPage() {
   }
 
   async function onRefresh() {
-    setStatus({ kind: "busy", msg: `Crawling the latest official content for ${region}/${lang}...` });
+    const importUrl = apiUrl.trim();
+    setStatus({ kind: "busy", msg: importUrl ? "Importing structured Integreat API pages..." : `Crawling the latest official content for ${region}/${lang}...` });
     try {
-      const r = await refreshCrawl(region, lang, token);
-      setStatus({ kind: "ok", msg: `Crawled ${r.pages} latest pages for ${region}/${lang}.` });
+      const r = await refreshCrawl(region, lang, token, importUrl);
+      setStatus({ kind: "ok", msg: importUrl ? `Imported ${r.pages} structured pages for ${r.region}/${r.lang}.` : `Crawled ${r.pages} latest pages for ${region}/${lang}.` });
     } catch (e) { setStatus({ kind: "err", msg: (e as Error).message }); }
   }
 
@@ -166,6 +168,15 @@ export default function AdminPage() {
         <p className="mt-1 text-[13px] text-muted">
           Pull fresh official migration information into the vector DB on demand. Bavaria/general uses official public sources; city names use Integreat when available.
         </p>
+        <div className="mt-3">
+          <label className="mb-1 block text-[11px] text-muted">Integreat CMS API URL</label>
+          <input
+            value={apiUrl}
+            onChange={(e) => setApiUrl(e.target.value)}
+            placeholder="https://cms.integreat-app.de/<region>/<lang>/wp-json/extensions/v3/pages/"
+            className="h-10 w-full rounded-xl border border-line bg-paper px-3 text-[13px] text-ink outline-none focus:border-ink"
+          />
+        </div>
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <div>
             <label className="mb-1 block text-[11px] text-muted">Region</label>
@@ -180,7 +191,9 @@ export default function AdminPage() {
               <option value="de">German</option>
             </select>
           </div>
-          <button onClick={onRefresh} className="btn btn-primary h-10 px-4 text-[14px]">Crawl latest</button>
+          <button onClick={onRefresh} className="btn btn-primary h-10 px-4 text-[14px]">
+            {apiUrl.trim() ? "Import API URL" : "Crawl latest"}
+          </button>
         </div>
       </section>
 

@@ -23,7 +23,7 @@ import agent
 import llm
 import vectorstore
 from vectorstore import get_store
-from crawl import crawl_region
+from crawl import crawl_region, crawl_integreat_api_url
 from rag import Retriever
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -62,6 +62,7 @@ class IngestRequest(BaseModel):
 class RefreshRequest(BaseModel):
     region: str = "bavaria"
     lang: str = "en"
+    url: str = ""
 
 
 # --------------------------------------------------------------------------- #
@@ -194,13 +195,18 @@ def source(source_id: str) -> JSONResponse:
         "title": md.get("title", source_id),
         "source": md.get("source", "admin upload"),
         "url": md.get("url", ""),
+        "admin_url": md.get("admin_url", ""),
+        "api_url": md.get("api_url", ""),
         "date": md.get("date", ""),
+        "metadata": md,
         "text": item.get("text", ""),
     })
 
 
 @app.post("/refresh")
 def refresh(req: RefreshRequest) -> dict:
+    if req.url.strip():
+        return crawl_integreat_api_url(req.url.strip(), upsert=True)
     lang = _lang(req.lang)
     n = crawl_region(req.region, lang)
     return {"ok": True, "pages": n, "region": req.region, "lang": lang}

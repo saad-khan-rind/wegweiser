@@ -35,7 +35,7 @@ export class AdminController {
   }
 
   @Post("refresh")
-  refresh(@Body() body: { region?: string; lang?: string }) {
+  refresh(@Body() body: { region?: string; lang?: string; url?: string }) {
     return this.admin.refresh(body);
   }
 }

@@ -24,9 +24,11 @@ import llm
 import vectorstore
 from vectorstore import get_store
 from crawl import crawl_region
+from rag import Retriever
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("main")
+_corpus = Retriever()
 
 app = FastAPI(title="Wegweiser AI", version="0.2.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -182,6 +184,9 @@ def clear_documents() -> dict:
 def source(source_id: str) -> JSONResponse:
     item = get_store().get(source_id)
     if not item:
+        corpus = _corpus.get(source_id)
+        if corpus:
+            return JSONResponse(corpus)
         raise HTTPException(status_code=404, detail="source not found")
     md = item.get("metadata", {})
     return JSONResponse({

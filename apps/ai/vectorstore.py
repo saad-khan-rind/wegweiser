@@ -127,25 +127,39 @@ class PineconeStore(BaseStore):
             md = dict(r.get("metadata", {}))
             md["text"] = r["text"][:3000]
             vectors.append({"id": r["id"], "values": embeddings.embed_text(r["text"]), "metadata": md})
-        self._index.upsert(vectors=vectors)
-        return len(vectors)
+        try:
+            self._index.upsert(vectors=vectors)
+            return len(vectors)
+        except Exception as e:  # noqa: BLE001
+            global _last_error
+            _last_error = str(e)
+            log.warning("Pinecone upsert failed: %s", e)
+            raise
 
     def query(self, text: str, k: int = 4) -> list[dict]:
-        res = self._index.query(vector=embeddings.embed_text(text), top_k=k, include_metadata=True)
-        matches = res.get("matches", []) if isinstance(res, dict) else getattr(res, "matches", [])
-        out = []
-        for m in matches:
-            md = (m.get("metadata") if isinstance(m, dict) else getattr(m, "metadata", {})) or {}
-            mid = m.get("id") if isinstance(m, dict) else getattr(m, "id", "")
-            score = m.get("score") if isinstance(m, dict) else getattr(m, "score", 0)
-            out.append({"id": mid, "score": score, "text": md.get("text", ""), "metadata": md})
-        return out
+        try:
+            res = self._index.query(vector=embeddings.embed_text(text), top_k=k, include_metadata=True)
+            matches = res.get("matches", []) if isinstance(res, dict) else getattr(res, "matches", [])
+            out = []
+            for m in matches:
+                md = (m.get("metadata") if isinstance(m, dict) else getattr(m, "metadata", {})) or {}
+                mid = m.get("id") if isinstance(m, dict) else getattr(m, "id", "")
+                score = m.get("score") if isinstance(m, dict) else getattr(m, "score", 0)
+                out.append({"id": mid, "score": score, "text": md.get("text", ""), "metadata": md})
+            return out
+        except Exception as e:  # noqa: BLE001
+            global _last_error
+            _last_error = str(e)
+            log.warning("Pinecone query failed; continuing without vector matches: %s", e)
+            return []
 
     def list(self, limit: int = 100) -> list[dict]:
         try:
             stats = self._index.describe_index_stats()
             return [{"id": "(pinecone)", "metadata": {"total": stats.get("total_vector_count", 0)}}]
-        except Exception:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
+            global _last_error
+            _last_error = str(e)
             return []
 
     def get(self, record_id: str) -> dict | None:

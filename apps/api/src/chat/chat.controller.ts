@@ -33,4 +33,11 @@ export class ChatController {
     if (!res.ok) throw new ServiceUnavailableException(`source lookup failed (${res.status})`);
     return res.json();
   }
+
+  @Get("local-source/:id")
+  async localSource(@Param("id") id: string) {
+    const doc = this.chat.localSource(id);
+    if (!doc) throw new ServiceUnavailableException("local source not found");
+    return doc;
+  }
 }

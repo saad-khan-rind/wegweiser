@@ -63,6 +63,10 @@ export class ChatService {
     return this.composeFallback(query, tags, language);
   }
 
+  localSource(id: string): Doc | null {
+    return this.knowledge.get(id);
+  }
+
   // ---- Agent service -------------------------------------------------------
   private async callAgent(
     query: string,
@@ -94,7 +98,7 @@ export class ChatService {
         title: c.title,
         origin: c.source ?? "source",
         updatedAt: c.date ?? "",
-        url: c.url || (c.id && c.origin === "upload" ? `/api/source/${encodeURIComponent(c.id)}` : ""),
+        url: c.url || (c.id ? `/api/source/${encodeURIComponent(c.id)}` : ""),
         relevance: c.relevance,
         accepted: true,
       }));
@@ -103,7 +107,7 @@ export class ChatService {
         title: r.title,
         origin: r.source ?? r.origin ?? "source",
         updatedAt: r.date ?? "",
-        url: r.url || (r.id && r.origin === "upload" ? `/api/source/${encodeURIComponent(r.id)}` : ""),
+        url: r.url || (r.id ? `/api/source/${encodeURIComponent(r.id)}` : ""),
         relevance: r.relevance,
         accepted: Boolean(r.accepted),
         excerpt: r.excerpt ?? "",
@@ -133,7 +137,11 @@ export class ChatService {
     const escalate = ESCALATE_RE.test(query);
     const docs = await this.knowledge.retrieve(query, tags, 3);
     const sources: Source[] = docs.map((d) => ({
-      title: d.title, origin: d.origin, updatedAt: d.updatedAt, url: (d as any).url ?? "",
+      id: d.id,
+      title: d.title, origin: d.origin, updatedAt: d.updatedAt,
+      url: (d as any).url || `/api/local-source/${encodeURIComponent(d.id)}`,
+      accepted: true,
+      relevance: d.score ?? 1,
     }));
 
     if (!docs.length) {
@@ -160,6 +168,20 @@ export class ChatService {
     }
 
     const top = docs[0];
+    const fallback = registrationFallback(query, language);
+    if (fallback) {
+      return {
+        answer: fallback,
+        cards: this.cardsFor(false, language),
+        sources,
+        confidence: 0.62,
+        escalate: false,
+        deidentifiedQuery: query,
+        provider: "local",
+        model: "",
+        resourcesConsidered: sources,
+      };
+    }
     return {
       answer: language === "de"
         ? "Ich habe relevante Quellen gefunden, kann daraus aber gerade keine sicher geprüfte Antwort formulieren. Bitte lies die Quellen oder frage eine Beratungsperson."
@@ -210,4 +232,12 @@ function detectLanguage(query: string, requested?: string): "en" | "de" {
 
 function clamp(n: number): number {
   return Math.max(0, Math.min(1, n));
+}
+
+function registrationFallback(query: string, language: "en" | "de"): string {
+  const q = query.toLowerCase();
+  if (!/(anmeldung|anmelden|registration|register|address|melde|wohnsitz)/i.test(q)) return "";
+  return language === "de"
+    ? "Für die Anmeldung meldest du deine Wohnung bei der zuständigen Meldebehörde oder beim Bürgeramt an. Bring deinen Pass oder Ausweis und die Wohnungsgeberbestätigung mit; prüfe zusätzlich die Terminseite deiner Stadt."
+    : "For city registration, register your address with the local registration office or Bürgeramt. Bring your passport or ID and the landlord confirmation; also check your city's appointment page for local requirements.";
 }

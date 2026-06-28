@@ -53,6 +53,10 @@ export class KnowledgeService {
     return this.localRetrieve(query, tags, k);
   }
 
+  get(id: string): Doc | null {
+    return this.docs.find((d) => d.id === id) ?? null;
+  }
+
   private localRetrieve(query: string, tags: string[], k: number): Doc[] {
     const terms = this.tokenize(query);
     const scored = this.docs.map((d) => {

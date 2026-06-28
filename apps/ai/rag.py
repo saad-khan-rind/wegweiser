@@ -125,3 +125,12 @@ class Retriever:
                 "updatedAt": d.updated_at, "url": d.url, "tags": d.tags, "text": d.text, "score": round(s, 4),
             })
         return out
+
+    def get(self, doc_id: str) -> dict | None:
+        for d in self.docs:
+            if d.id == doc_id:
+                return {
+                    "id": d.id, "title": d.title, "source": d.origin,
+                    "url": d.url, "date": d.updated_at, "text": d.text,
+                }
+        return None

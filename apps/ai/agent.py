@@ -253,7 +253,7 @@ def run(query: str, tags: list[str], region: str = "", language: str = "en",
     llm_info = llm.available()
     trace.append(f"Considered {len(considered)} resources; kept {len(sources)} relevant sources")
 
-    if _looks_vague(query) and not extra_context and len(sources) < 2:
+    if _looks_vague(query) and not extra_context and len(sources) < 2 and not _registration_topic(query):
         return _with_runtime(_clarify_first(answer_language, trace, sources), resources, llm_info)
 
     if not sources:
@@ -311,6 +311,17 @@ def run(query: str, tags: list[str], region: str = "", language: str = "en",
         break
 
     if unsupported or confidence < 0.55:
+        fallback = _extractive_answer(query, sources, answer_language)
+        if fallback:
+            trace.append("Used extractive fallback because model confidence was too low")
+            return _with_runtime({
+                "answer": fallback,
+                "citations": _citations(sources, []),
+                "confidence": 0.62,
+                "escalate": False,
+                "trace": trace,
+                "needs_input": False,
+            }, resources, llm_info)
         return _with_runtime(_not_enough_info(answer_language, [], trace, confidence=min(confidence, 0.45)), resources, llm_info)
 
     escalate = _should_escalate(query, confidence)

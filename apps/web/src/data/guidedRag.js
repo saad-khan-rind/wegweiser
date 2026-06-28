@@ -253,15 +253,89 @@ function documentOptions(docs, nodeId) {
   return options.slice(0, 8)
 }
 
+const FALLBACK_NODE_OPTIONS = {
+  'current-status': [
+    { value: 'student', label: 'Student permit', icon: 'GraduationCap' },
+    { value: 'work', label: 'Work permit / Blue Card', icon: 'BriefcaseBusiness' },
+    { value: 'family', label: 'Family reunification', icon: 'Users' },
+    { value: 'asylum', label: 'Asylum / protection', icon: 'ShieldCheck' },
+    { value: 'permanent', label: 'Permanent residence', icon: 'BadgeCheck' },
+    { value: 'not_sure', label: "I'm not sure", icon: 'Search' },
+  ],
+  'planning-visa': [
+    { value: 'study', label: 'Studies', icon: 'GraduationCap' },
+    { value: 'skilled_work', label: 'Skilled work / Blue Card', icon: 'BriefcaseBusiness' },
+    { value: 'vocational_training', label: 'Vocational training', icon: 'BadgeCheck' },
+    { value: 'opportunity_card', label: 'Opportunity Card', icon: 'Search' },
+    { value: 'family', label: 'Family reunification', icon: 'Users' },
+    { value: 'asylum', label: 'Asylum / protection', icon: 'ShieldCheck' },
+  ],
+  'current-goal': [
+    { value: 'registration', label: 'Register address', icon: 'FileText' },
+    { value: 'renew_permit', label: 'Renew/extend permit', icon: 'BadgeCheck' },
+    { value: 'work_rights', label: 'Work rights', icon: 'BriefcaseBusiness' },
+    { value: 'health_insurance', label: 'Health insurance', icon: 'ShieldCheck' },
+    { value: 'family_benefits', label: 'Family & benefits', icon: 'Users' },
+    { value: 'language_integration', label: 'Language & integration', icon: 'GraduationCap' },
+  ],
+  'planning-readiness': [
+    { value: 'admission_or_offer', label: 'Admission / job offer', icon: 'BadgeCheck' },
+    { value: 'documents_ready', label: 'Documents ready', icon: 'FileText' },
+    { value: 'financing_ready', label: 'Financing secured', icon: 'BriefcaseBusiness' },
+    { value: 'still_exploring', label: 'Still exploring', icon: 'Search' },
+  ],
+  'current-documents': [
+    { value: 'passport', label: 'Valid passport', icon: 'FileText' },
+    { value: 'biometric_photo', label: 'Biometric photo', icon: 'FileText' },
+    { value: 'health_insurance', label: 'Health insurance proof', icon: 'FileText' },
+    { value: 'registration_certificate', label: 'Registration certificate', icon: 'FileText' },
+    { value: 'income_or_livelihood', label: 'Proof of income/livelihood', icon: 'FileText' },
+    { value: 'none_yet', label: 'None of these yet', icon: 'Search' },
+  ],
+  'planning-documents': [
+    { value: 'passport', label: 'Valid passport', icon: 'FileText' },
+    { value: 'biometric_photo', label: 'Biometric photo', icon: 'FileText' },
+    { value: 'health_insurance', label: 'Health insurance proof', icon: 'FileText' },
+    { value: 'income_or_livelihood', label: 'Proof of income/livelihood', icon: 'FileText' },
+    { value: 'enrolment_or_admission', label: 'Admission/enrolment proof', icon: 'GraduationCap' },
+    { value: 'none_yet', label: 'None of these yet', icon: 'Search' },
+  ],
+}
+
+function fallbackNodeOptions(nodeId) {
+  const base = FALLBACK_NODE_OPTIONS[nodeId] ?? [
+    { value: 'continue', label: 'Continue', icon: 'ArrowRight' },
+    { value: 'not_sure', label: "I'm not sure", icon: 'Search' },
+  ]
+  return base.map((option) => ({
+    ...option,
+    helper: 'Choose to continue. The assistant grounds the final answer in official sources.',
+    badge: 'Guided',
+    next: defaultNext(nodeId),
+    source: 'Guided navigation',
+  }))
+}
+
 export function buildPreviewGuidedOptions({ nodeId, answers = {}, path = [] }) {
   const docs = retrieve(guidedQuery(nodeId, answers, path), answers)
-  const options = ['planning-readiness', 'planning-documents', 'current-documents'].includes(nodeId)
+  let options = ['planning-readiness', 'planning-documents', 'current-documents'].includes(nodeId)
     ? documentOptions(docs, nodeId)
     : topicOptions(docs, nodeId, answers)
+
+  // Defense-in-depth: never let the bubble dead-end, even fully offline with no
+  // local matches. Logical navigation options are always available.
+  let provider = options.length ? 'local-rag-preview' : 'guided-navigation'
+  const trace = options.length
+    ? ['Backend unavailable; generated explorable options from bundled local RAG preview. No internet used.']
+    : ['Backend and local RAG unavailable; using built-in logical navigation options so the flow can continue.']
+  if (!options.length) {
+    options = fallbackNodeOptions(nodeId)
+  }
+
   return {
     options,
     generatedAt: new Date().toISOString(),
-    provider: options.length ? 'local-rag-preview' : 'ai-unavailable',
+    provider,
     sources: docs.map((doc) => ({
       id: doc.id,
       title: doc.title,
@@ -270,8 +344,6 @@ export function buildPreviewGuidedOptions({ nodeId, answers = {}, path = [] }) {
       relevance: doc.score,
       excerpt: doc.text.slice(0, 240),
     })),
-    trace: options.length
-      ? ['Backend unavailable; generated explorable options from bundled local RAG preview. No internet used.']
-      : ['Backend unavailable; local RAG preview did not contain options for this bubble.'],
+    trace,
   }
 }

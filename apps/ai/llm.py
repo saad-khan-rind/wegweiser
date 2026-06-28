@@ -126,6 +126,39 @@ def _gemini(system: str, user: str, temperature: float) -> str:
     return "".join(str(p.get("text", "")) for p in parts)
 
 
+def gemini_embed(text: str, dim: int = 768) -> list[float] | None:
+    """Embed text with Gemini's text-embedding-004 (semantic, multilingual).
+
+    Used when a GEMINI_API_KEY is present so admin-uploaded documents are
+    retrieved by meaning rather than by hashed tokens. Returns None on failure
+    so callers fall back to the deterministic hash embedding.
+    """
+    key = _gemini_key()
+    if not key:
+        return None
+    model = os.getenv("GEMINI_EMBED_MODEL", "text-embedding-004")
+    payload = {
+        "model": f"models/{model}",
+        "content": {"parts": [{"text": (text or "")[:8000]}]},
+        "outputDimensionality": dim,
+    }
+    try:
+        req = urllib.request.Request(
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{urllib.parse.quote(model, safe='')}:embedContent?key={urllib.parse.quote(key, safe='')}",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = json.loads(r.read().decode("utf-8"))
+        values = ((data.get("embedding") or {}).get("values")) or []
+        return values if isinstance(values, list) and values else None
+    except Exception as e:  # noqa: BLE001
+        log.warning("Gemini embed failed: %s", e)
+        return None
+
+
 def embed(text: str) -> list[float] | None:
     global _embed_warned
     last_error: Exception | None = None

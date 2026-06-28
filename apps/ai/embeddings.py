@@ -1,10 +1,18 @@
-"""Embeddings with a reliable default.
+"""Embeddings with a reliable default and an automatic semantic upgrade.
 
-Default: deterministic hashing embeddings. They are not as semantic as a real
-embedding model, but they work immediately in Docker without pulling an Ollama
-embedding model and keep Pinecone usable during the demo.
+Provider resolution (EMBED_PROVIDER):
+  - "auto"  (default): use Gemini's text-embedding-004 when GEMINI_API_KEY is
+              set (semantic, multilingual); otherwise fall back to the
+              deterministic hash embedding so the pipeline always works.
+  - "gemini": force Gemini embeddings (hash fallback if a call fails).
+  - "ollama": use the configured Ollama EMBED_MODEL (hash fallback if absent).
+  - "hash":   deterministic hashing embeddings only (no external calls).
 
-Optional: set EMBED_PROVIDER=ollama after pulling EMBED_MODEL inside Ollama.
+The hash embedding is not as semantic as a real model, but it works instantly
+in Docker without pulling a model and keeps Pinecone usable for a demo.
+
+NOTE: all vectors in one index must share an embedding space. If you switch
+providers after ingesting, clear the vector store (admin "clear") and re-ingest.
 """
 from __future__ import annotations
 import hashlib
@@ -12,13 +20,17 @@ import math
 import os
 
 from envloader import load_env
-from llm import embed as ollama_embed
+from llm import embed as ollama_embed, gemini_embed
 
 load_env()
 
-DIM = int(os.getenv("EMBED_DIM", "768"))  # nomic-embed-text = 768
-_PROVIDER = os.getenv("EMBED_PROVIDER", "hash").strip().lower()  # "hash" | "ollama"
+DIM = int(os.getenv("EMBED_DIM", "768"))  # nomic-embed-text & text-embedding-004 = 768
+_PROVIDER = os.getenv("EMBED_PROVIDER", "auto").strip().lower()  # auto|gemini|ollama|hash
 _active_provider = _PROVIDER
+
+
+def _gemini_key_present() -> bool:
+    return bool(os.getenv("GEMINI_API_KEY", "").strip())
 
 
 def _hash_embed(text: str) -> list[float]:
@@ -46,17 +58,37 @@ def _features(text: str) -> list[str]:
     return features
 
 
+def _resolve_provider() -> str:
+    if _PROVIDER == "auto":
+        return "gemini" if _gemini_key_present() else "hash"
+    return _PROVIDER
+
+
 def embed_text(text: str) -> list[float]:
     global _active_provider
-    if _PROVIDER == "ollama":
+    provider = _resolve_provider()
+
+    if provider == "gemini":
+        v = gemini_embed(text, DIM)
+        if v:
+            if len(v) != DIM:
+                _set_dim(len(v))
+            _active_provider = "gemini"
+            return v
+        _active_provider = "hash-fallback"
+        return _hash_embed(text)
+
+    if provider == "ollama":
         v = ollama_embed(text)
         if v:
-            # keep the store dimension stable even if the model differs
             if len(v) != DIM:
                 _set_dim(len(v))
             _active_provider = "ollama"
             return v
         _active_provider = "hash-fallback"
+        return _hash_embed(text)
+
+    _active_provider = "hash"
     return _hash_embed(text)
 
 

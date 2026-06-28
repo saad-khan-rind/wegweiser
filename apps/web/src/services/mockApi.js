@@ -697,6 +697,7 @@ export const apiService = {
     // Live answer from the backend AI service. Returns the same response shape
     // the UI consumed before, plus the (dynamic) clarifying-question catalog to
     // persist across follow-ups so answer labels can be resolved.
+    const priorGroup = (activeSession.cardGroups ?? [])[activeSession.cardGroups.length - 1] ?? null
     const { response, questionDefs } = await requestAssistant({
       prompt,
       intent: activeSession.intent,
@@ -705,6 +706,7 @@ export const apiService = {
       language: session.locale ?? DEFAULT_LOCALE,
       questionDefs: activeSession.guidedQuestionDefs ?? [],
       originalPrompt: activeSession.originalPrompt ?? prompt,
+      priorAnswer: priorGroup?.answerSummary ?? '',
     })
     activeSession.guidedQuestionDefs = questionDefs
 
@@ -734,6 +736,7 @@ export const apiService = {
         prompt,
         intro: response.intro,
         cards: response.cards,
+        answerSummary: response.answerSummary ?? '',
         contextSummary: response.contextSummary,
         walletBundle: response.walletBundle,
         meta: response.meta,
@@ -793,6 +796,7 @@ export const apiService = {
         prompt: activeSession.originalPrompt,
         intro: response.intro,
         cards: response.cards,
+        answerSummary: response.answerSummary ?? '',
         contextSummary: response.contextSummary,
         walletBundle: response.walletBundle,
         meta: response.meta,

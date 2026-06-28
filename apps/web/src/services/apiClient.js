@@ -347,7 +347,7 @@ function compactFollowUps(followUpPrompts = []) {
     .slice(-8)
 }
 
-function buildAssistantExtraContext({ intent, originalPrompt, answers, followUpPrompts, questionDefs }) {
+function buildAssistantExtraContext({ intent, originalPrompt, answers, followUpPrompts, questionDefs, priorAnswer }) {
   const answeredQuestions = resolveAnsweredQuestions(questionDefs, answers)
   const followUps = compactFollowUps(followUpPrompts)
   const lines = [
@@ -373,7 +373,17 @@ function buildAssistantExtraContext({ intent, originalPrompt, answers, followUpP
     })
   }
 
-  return lines.join('\n').slice(0, 2400)
+  // Carry the gist of the previous answer so a follow-up like "what documents?"
+  // keeps its thread instead of starting cold.
+  if (priorAnswer) {
+    const compact = String(priorAnswer).replace(/\s+/g, ' ').trim().slice(0, 700)
+    if (compact) {
+      lines.push('Previous assistant answer (for context, do not repeat verbatim):')
+      lines.push(compact)
+    }
+  }
+
+  return lines.join('\n').slice(0, 2600)
 }
 
 /**
@@ -391,12 +401,13 @@ export async function requestAssistant({
   region = '',
   questionDefs = [],
   originalPrompt = '',
+  priorAnswer = '',
 }) {
   const code = lang(language)
   const s = STRINGS[code]
   const meta = { requestId: uuid(), generatedAt: new Date().toISOString(), intent, version: '1.0' }
   const base = apiBase()
-  const extraContext = buildAssistantExtraContext({ intent, originalPrompt, answers, followUpPrompts, questionDefs })
+  const extraContext = buildAssistantExtraContext({ intent, originalPrompt, answers, followUpPrompts, questionDefs, priorAnswer })
 
   let data = null
   if (base) {
@@ -487,6 +498,8 @@ export async function requestAssistant({
   }
 
   const cards = buildCardsFromAnswer(data, code)
+  const summarySection = parseSections(data.answer).find((x) => x.key === 'summary')
+  const answerSummary = summarySection ? sectionParagraph(summarySection) : String(data.answer || '').trim()
   return {
     response: {
       meta,
@@ -495,6 +508,7 @@ export async function requestAssistant({
       contextSummary,
       guidedQuestions: null,
       cards,
+      answerSummary,
       walletBundle: {
         bundleId: uuid(),
         title: prompt.slice(0, 100),

@@ -354,6 +354,7 @@ export async function requestAssistant({
   language = 'en',
   region = '',
   questionDefs = [],
+  history = [],
 }) {
   const code = lang(language)
   const s = STRINGS[code]
@@ -365,16 +366,23 @@ export async function requestAssistant({
     try {
       const ctrl = new AbortController()
       const timer = setTimeout(() => ctrl.abort(), timeoutMs())
+      
+      const payload = {
+        query: prompt,
+        tags: [],
+        region,
+        language: code,
+        clarifyingAnswers: answers,
+        history: history.map(msg => ({
+          role: msg.sender === 'user' ? 'user' : 'assistant',
+          content: msg.text || msg.content
+        }))
+      }
+
       const res = await fetch(`${base}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: prompt,
-          tags: [],
-          region,
-          language: code,
-          clarifyingAnswers: answers,
-        }),
+        body: JSON.stringify(payload),
         signal: ctrl.signal,
       })
       clearTimeout(timer)

@@ -451,42 +451,4 @@ function guidedPrompt(answers: Record<string, unknown>, path: GuidedFlowPathItem
 
 function guidedContext(answers: Record<string, unknown>, path: GuidedFlowPathItem[], language: "en" | "de"): string {
   const lines = path.map((item, index) => {
-    const answer = item.answerLabel || valueToText(item.value);
-    return `${index + 1}. ${item.question || item.answerKey}: ${answer}`;
-  });
-  const answerLines = Object.entries(answers).map(([key, value]) => `- ${key}: ${valueToText(value)}`);
-  const heading = language === "de" ? "Gefuehrter Bubble-Kontext" : "Guided bubble context";
-  return [heading, ...lines, "Raw categories:", ...answerLines].join("\n").slice(0, 2400);
-}
-
-function guidedTags(answers: Record<string, unknown>): string[] {
-  const tags = new Set<string>();
-  if (answers.locationIntent === "planning_move") tags.add("status:arriving");
-  if (answers.journeyStage === "just_arrived") tags.add("status:arriving");
-  const visa = String(answers.visaStatus ?? "");
-  if (visa === "student") tags.add("status:student");
-  if (["work", "skilled_work", "blue_card", "opportunity_card", "vocational_training"].includes(visa)) tags.add("status:worker");
-  if (visa === "family") tags.add("status:family");
-  if (visa === "asylum") tags.add("status:asylum");
-  return Array.from(tags);
-}
-
-function sanitizeClarifyingAnswers(input: unknown): Record<string, string> {
-  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
-  const out: Record<string, string> = {};
-  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-    if (typeof value !== "string") continue;
-    const cleanKey = key.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80);
-    const cleanValue = deidentify(value).slice(0, 240);
-    if (cleanKey && cleanValue) out[cleanKey] = cleanValue;
-  }
-  return out;
-}
-
-function registrationFallback(query: string, language: "en" | "de"): string {
-  const q = query.toLowerCase();
-  if (!/(anmeldung|anmelden|registration|register|address|melde|wohnsitz)/i.test(q)) return "";
-  return language === "de"
-    ? "Zusammenfassung\nFür die Anmeldung meldest du deine Wohnung bei der zuständigen Meldebehörde oder beim Bürgeramt an.\n\nDokumenten-Checkliste\n- Pass oder Ausweis\n- Wohnungsgeberbestätigung\n\nSchritte\n1. Prüfe die zuständige Meldebehörde oder das Bürgeramt deiner Stadt.\n2. Bereite Pass/Ausweis und Wohnungsgeberbestätigung vor.\n3. Prüfe die Terminseite deiner Stadt, falls ein Termin erforderlich ist."
-    : "Summary\nFor city registration, register your address with the local registration office or Bürgeramt.\n\nDocument checklist\n- Passport or ID\n- Landlord confirmation\n\nActionable steps\n1. Check the responsible registration office or Bürgeramt for your city.\n2. Prepare your passport/ID and landlord confirmation.\n3. Check your city appointment page if an appointment is required.";
-}
+    const answer

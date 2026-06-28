@@ -24,6 +24,8 @@ OFFICIAL_HOSTS = (
     "bayern.de",
     "bamf.de",
     "make-it-in-germany.com",
+    "daad.de",
+    "study-in-germany.de",
     "arbeitsagentur.de",
     "bundesagentur.de",
     "germany4ukraine.de",
@@ -92,6 +94,27 @@ DIRECT_TOPICS = {
             ),
         },
     ],
+    "student_finance": [
+        {
+            "id": "official-study-in-germany-proof-financing",
+            "title": "Study in Germany - Proof of financing",
+            "url": "https://www.study-in-germany.de/en/plan-your-studies/requirements/proof-of-financing/",
+            "snippet": (
+                "International students normally need to prove that they have enough money to cover "
+                "living expenses in Germany. A blocked account is one accepted way to show this proof; "
+                "the current required amount should be checked on the official page."
+            ),
+        },
+        {
+            "id": "official-make-it-studies",
+            "title": "Make it in Germany - Studying in Germany",
+            "url": "https://www.make-it-in-germany.com/en/study-vocational-training/studies-in-germany",
+            "snippet": (
+                "Official federal information for international students explains study requirements, "
+                "including admission, financing, health insurance, and residence steps."
+            ),
+        },
+    ],
     "post_study": [
         {
             "id": "official-aufenthg-20",
@@ -147,6 +170,8 @@ def _topic(query: str) -> str:
         return "registration"
     if re.search(r"\b(after studies|after graduation|post study|post-study|nach dem studium|studienabschluss|graduation)\b", q):
         return "post_study"
+    if re.search(r"\b(blocked account|blocked amount|proof of funds|financial proof|proof of financial resources|sperrkonto|finanzierungsnachweis|lebensunterhalt)\b", q):
+        return "student_finance"
     if re.search(r"\b(student visa|study visa|visa for stud|national visa.*stud|studium.*visum|studentenvisum)\b", q):
         return "student_visa"
     return ""

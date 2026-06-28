@@ -22,6 +22,11 @@ import llm
 from vectorstore import get_store
 from rag import Retriever
 
+try:
+    from langchain_core.documents import Document  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    Document = None  # type: ignore
+
 log = logging.getLogger("agent")
 
 MAX_ITERS = int(os.getenv("AGENT_MAX_ITERS", "1"))
@@ -29,6 +34,10 @@ USE_WEB = os.getenv("AGENT_USE_WEB", "1") == "1"
 USE_BUNDLED_CORPUS = os.getenv("AGENT_USE_BUNDLED_CORPUS", "1") == "1"
 
 _corpus = Retriever()
+
+
+def langchain_available() -> bool:
+    return Document is not None
 
 
 # --------------------------------------------------------------------------- #
@@ -114,6 +123,11 @@ QUERY_CLUSTERS = [
     {"visa", "visum", "residence", "permit", "aufenthalt", "aufenthaltstitel", "residence permit"},
     {"student visa", "study visa", "national visa", "studentenvisum", "visum zum studium", "visa for studies"},
     {"study", "studies", "studium", "student", "studenten", "studierenden", "university", "hochschule"},
+    {
+        "blocked account", "blocked amount", "proof of funds", "proof of financial resources",
+        "financial proof", "secure livelihood", "subsistence", "living expenses",
+        "sperrkonto", "finanzierungsnachweis", "lebensunterhalt", "finanzielle mittel",
+    },
     {"graduation", "graduate", "abschluss", "studienabschluss", "after studies", "nach dem studium"},
     {"work", "job", "employment", "labour", "labor", "arbeit", "arbeiten", "arbeitsmarkt", "beschaeftigung", "beschäftigung"},
     {"registration", "register", "address", "anmeldung", "anmelden", "melde", "meldebehoerde", "meldebehorde", "buergeramt", "bürgeramt"},
@@ -131,6 +145,8 @@ IN_SCOPE_TERMS = {
     "melde", "buergeramt", "bürgeramt", "auslaender", "ausländer", "auslaenderbehoerde", "ausländerbehörde",
     "jobcenter", "arbeitsagentur", "work permit", "arbeitserlaubnis", "labour market", "arbeitsmarkt",
     "study", "studies", "student", "graduation", "after studies", "studium", "university", "hochschule", "school", "schule", "language course", "sprachkurs",
+    "blocked account", "blocked amount", "proof of funds", "proof of financial resources", "financial proof",
+    "secure livelihood", "subsistence", "living expenses", "sperrkonto", "finanzierungsnachweis", "lebensunterhalt",
     "integration", "integrationskurs", "health insurance", "krankenversicherung", "kindergeld",
     "buergergeld", "bürgergeld", "benefit", "sozialleistung", "german law", "german policy",
     "deutsches recht", "germany law", "travel to", "einreise", "entry requirement",
@@ -304,11 +320,54 @@ def _blocked_source(source: dict) -> bool:
 # LLM steps
 # --------------------------------------------------------------------------- #
 def _source_block(sources: list[dict]) -> str:
+    docs = _langchain_documents(sources)
+    if docs:
+        lines = []
+        for i, doc in enumerate(docs, 1):
+            meta = doc.metadata
+            source = meta.get("source", "")
+            date = meta.get("date", "")
+            title = meta.get("title", f"Source {i}")
+            header = f"{source}" + (f", {date}" if date else "")
+            lines.append(f"[{i}] {title} ({header})\n{doc.page_content[:1200]}")
+        return "\n\n".join(lines)
+
     lines = []
     for i, s in enumerate(sources, 1):
         meta = f"{s['source']}" + (f", {s['date']}" if s.get("date") else "")
         lines.append(f"[{i}] {s['title']} ({meta})\n{s['text'][:1200]}")
     return "\n\n".join(lines) if lines else "(no sources found)"
+
+
+def _langchain_documents(sources: list[dict]):
+    if Document is None:
+        return []
+    docs = []
+    for s in sources:
+        text = re.sub(r"\s+", " ", str(s.get("text", ""))).strip()
+        if not text:
+            continue
+        docs.append(Document(
+            page_content=text,
+            metadata={
+                "title": s.get("title", ""),
+                "source": s.get("source", ""),
+                "url": s.get("url", ""),
+                "date": s.get("date", ""),
+                "relevance": s.get("relevance", 0),
+                "matched_query": s.get("matched_query", ""),
+            },
+        ))
+    return docs
+
+
+def _langchain_context_document(answers: dict, path: list[dict], language: str):
+    if Document is None:
+        return None
+    return Document(
+        page_content=_guided_context(answers, path, language),
+        metadata={"source": "user-guided-flow", "language": language},
+    )
 
 
 def _draft_system(language: str) -> str:
@@ -383,6 +442,8 @@ def run_guided_options(node_id: str, answers: dict | None, path: list[dict] | No
     query = _guided_options_query(clean_node, clean_answers, clean_path, language)
     tags = _guided_tags(clean_answers)
     trace = [f"Building options for node: {clean_node}"]
+    if Document is not None:
+        trace.append("LangChain document context enabled")
     llm_info = llm.available()
     sources, considered = gather_sources_with_audit(query, tags, k=4, region=region, language=language)
     trace.append(f"Considered {len(considered)} resources; kept {len(sources)} relevant sources")
@@ -399,10 +460,9 @@ def run_guided_options(node_id: str, answers: dict | None, path: list[dict] | No
             trace.append("Generated options with the LLM from retrieved sources")
 
     if not options:
-        options = _guided_options_fallback(clean_node, clean_answers, language)
-        trace.append("Used conservative fallback options")
+        trace.append("No source-backed AI options generated; returning empty options")
 
-    safe_options = _sanitize_guided_options(options, clean_answers, language, clean_node)
+    safe_options = _sanitize_guided_options(options, language, clean_node)
     return _with_runtime({
         "nodeId": clean_node,
         "options": safe_options,
@@ -662,12 +722,12 @@ def _guided_options_query(node_id: str, answers: dict, path: list[dict], languag
         return (
             f"Aktuelle offizielle Deutschland Visa Aufenthalt Optionen fuer Bubble {node_id}. "
             f"Kontext: Alter {age}, Standort {location}, bisheriger Weg {trail}, Visum {visa}. "
-            "Keine unpassenden Optionen fuer Minderjaehrige."
+            "Nutze das Alter als Eignungskriterium und zeige nur quellenbasierte passende naechste Optionen."
         )
     return (
         f"Current official Germany visa residence options for guided bubble {node_id}. "
         f"Context: age {age}, location {location}, path {trail}, visa {visa}. "
-        "No unsuitable options for minors."
+        "Use the age as an eligibility constraint and show only source-backed suitable next options."
     )
 
 
@@ -676,9 +736,8 @@ def _guided_options_system(language: str) -> str:
     return (
         "You generate only the next tappable options for a guided migration flow for Germany. "
         "Use ONLY the provided sources and known context. Do not invent eligibility. "
-        "For users under 18, never show university student visa, skilled worker, EU Blue Card, "
-        "Opportunity Card, self-employment, or job-offer work paths. Use child/family, school-supervised, "
-        "protection, or counselor-first paths instead. "
+        "Evaluate the user's age, location, and previous answers against the sources. "
+        "If the sources do not clearly support an option for this user context, omit it or ask for counselor-first guidance. "
         f"Write labels and helpers in {answer_language}. "
         "Respond as strict JSON: "
         '{"options":[{"value": string, "label": string, "helper": string, "icon": string, '
@@ -689,6 +748,9 @@ def _guided_options_system(language: str) -> str:
 
 def _guided_options_user(node_id: str, answers: dict, path: list[dict], sources: list[dict], language: str) -> str:
     context = _guided_context(answers, path, language)
+    context_doc = _langchain_context_document(answers, path, language)
+    if context_doc is not None:
+        context = context_doc.page_content
     source_block = _source_block(sources)
     return (
         f"Current node id: {node_id}\n"
@@ -698,7 +760,7 @@ def _guided_options_user(node_id: str, answers: dict, path: list[dict], sources:
     )
 
 
-def _sanitize_guided_options(options: list[dict], answers: dict, language: str, node_id: str) -> list[dict]:
+def _sanitize_guided_options(options: list[dict], language: str, node_id: str) -> list[dict]:
     out = []
     for item in options[:12]:
         if not isinstance(item, dict):
@@ -706,7 +768,7 @@ def _sanitize_guided_options(options: list[dict], answers: dict, language: str, 
         value = re.sub(r"[^a-zA-Z0-9_-]+", "", str(item.get("value", "")))[:80]
         label = re.sub(r"\s+", " ", str(item.get("label", value))).strip()[:120]
         helper = re.sub(r"\s+", " ", str(item.get("helper", ""))).strip()[:240]
-        if not value or not label or not _guided_option_allowed(value, answers):
+        if not value or not label:
             continue
         next_id = re.sub(r"[^a-zA-Z0-9_-]+", "", str(item.get("next", _default_guided_next(node_id))))[:80]
         out.append({
@@ -719,35 +781,7 @@ def _sanitize_guided_options(options: list[dict], answers: dict, language: str, 
             "source": re.sub(r"\s+", " ", str(item.get("source", ""))).strip()[:160],
         })
 
-    if node_id == "planning-visa" and _is_minor(answers):
-        out = [item for item in out if item["value"] not in {"student", "skilled_work", "blue_card", "opportunity_card"}]
     return out[:8]
-
-
-def _guided_option_allowed(value: str, answers: dict) -> bool:
-    if not _is_minor(answers):
-        return True
-    blocked = {
-        "student",
-        "vocational_training",
-        "skilled_work",
-        "blue_card",
-        "opportunity_card",
-        "self_employment",
-        "job_offer",
-        "university_admission",
-        "training_contract",
-        "employment_contract",
-        "qualification_proof",
-    }
-    return value not in blocked
-
-
-def _is_minor(answers: dict) -> bool:
-    try:
-        return float(answers.get("age", 99)) < 18
-    except Exception:
-        return False
 
 
 def _default_guided_next(node_id: str) -> str:
@@ -760,38 +794,6 @@ def _default_guided_next(node_id: str) -> str:
     if node_id in {"current-goal"}:
         return "current-documents"
     return "ai-result"
-
-
-def _guided_options_fallback(node_id: str, answers: dict, language: str) -> list[dict]:
-    de = language == "de"
-    def txt(en: str, german: str) -> str:
-        return german if de else en
-
-    badge = txt("AI safety checked", "AI-sicherheitsgeprueft")
-    if node_id == "planning-visa" and _is_minor(answers):
-        return [
-            {"value": "family", "label": txt("Family reunification for a child", "Familiennachzug fuer ein Kind"), "helper": txt("For minors joining parents or guardians in Germany.", "Fuer Minderjaehrige, die zu Eltern oder Sorgeberechtigten ziehen."), "icon": "Users", "badge": badge, "next": "planning-readiness"},
-            {"value": "school", "label": txt("School or supervised stay", "Schule oder betreuter Aufenthalt"), "helper": txt("Needs guardian and school/program context.", "Braucht Sorgeberechtigte und Schul-/Programmkontext."), "icon": "GraduationCap", "badge": badge, "next": "planning-readiness"},
-            {"value": "asylum", "label": txt("Protection or asylum", "Schutz oder Asyl"), "helper": txt("Sensitive route; human counseling is recommended.", "Sensibler Weg; Beratung ist empfohlen."), "icon": "ShieldCheck", "badge": badge, "next": "planning-readiness"},
-            {"value": "counselor", "label": txt("Talk to a counselor first", "Erst mit Beratung sprechen"), "helper": txt("For a child or unclear case, get human support first.", "Bei Kindern oder unklarer Lage zuerst menschliche Hilfe holen."), "icon": "Lightbulb", "badge": badge, "next": "planning-readiness"},
-        ]
-    if node_id == "planning-visa":
-        return [
-            {"value": "student", "label": txt("Student visa", "Studentenvisum"), "helper": txt("For higher education study or preparation.", "Fuer Hochschulstudium oder Vorbereitung."), "icon": "GraduationCap", "badge": badge, "next": "planning-readiness"},
-            {"value": "vocational_training", "label": txt("Vocational training visa", "Visum zur Ausbildung"), "helper": txt("For Ausbildung or training contracts.", "Fuer Ausbildung oder Ausbildungsvertrag."), "icon": "BriefcaseBusiness", "badge": badge, "next": "planning-readiness"},
-            {"value": "skilled_work", "label": txt("Skilled worker visa", "Fachkraeftevisum"), "helper": txt("For recognized qualifications and qualified employment.", "Fuer anerkannte Qualifikation und qualifizierte Arbeit."), "icon": "BadgeCheck", "badge": badge, "next": "planning-readiness"},
-            {"value": "blue_card", "label": txt("EU Blue Card", "Blaue Karte EU"), "helper": txt("For qualified employment with salary requirements.", "Fuer qualifizierte Beschaeftigung mit Gehaltsanforderungen."), "icon": "Sparkles", "badge": badge, "next": "planning-readiness"},
-            {"value": "opportunity_card", "label": txt("Opportunity Card", "Chancenkarte"), "helper": txt("For job search if criteria are met.", "Zur Jobsuche, wenn Kriterien erfuellt sind."), "icon": "Search", "badge": badge, "next": "planning-readiness"},
-            {"value": "family", "label": txt("Family reunification", "Familiennachzug"), "helper": txt("For joining close family in Germany.", "Zum Nachzug zu enger Familie in Deutschland."), "icon": "Users", "badge": badge, "next": "planning-readiness"},
-        ]
-    if node_id == "planning-readiness" and _is_minor(answers):
-        return [
-            {"value": "family_invitation", "label": txt("Family in Germany", "Familie in Deutschland"), "helper": txt("A parent or guardian is already in Germany.", "Ein Elternteil oder Vormund ist in Deutschland."), "badge": badge, "next": "planning-documents"},
-            {"value": "school_acceptance", "label": txt("School/program acceptance", "Schul-/Programmzusage"), "helper": txt("A school, exchange, or supervised program is involved.", "Eine Schule, ein Austausch oder betreutes Programm ist beteiligt."), "badge": badge, "next": "planning-documents"},
-            {"value": "guardian_support", "label": txt("Guardian support", "Unterstuetzung durch Sorgeberechtigte"), "helper": txt("A legal guardian can support the application.", "Ein gesetzlicher Vormund kann unterstuetzen."), "badge": badge, "next": "planning-documents"},
-            {"value": "still_exploring", "label": txt("Still exploring", "Noch am Vergleichen"), "helper": txt("Compare safe routes first.", "Sichere Wege zuerst vergleichen."), "badge": badge, "next": "planning-documents"},
-        ]
-    return []
 
 
 def _required_clarifications(query: str, language: str, extra_context: str) -> list[dict]:
@@ -975,6 +977,17 @@ def _student_visa_topic(query: str) -> bool:
     return bool(re.search(r"\b(student visa|study visa|visa for stud|national visa.*stud|studentenvisum|visum zum studium)\b", q))
 
 
+def _student_finance_topic(query: str) -> bool:
+    q = _normalize(query)
+    has_student_context = bool(re.search(r"\b(student|study|studium|studentenvisum|visum zum studium)\b", q))
+    has_finance_context = bool(re.search(
+        r"\b(blocked account|blocked amount|proof of funds|financial proof|proof of financial resources|"
+        r"secure livelihood|living expenses|sperrkonto|finanzierungsnachweis|lebensunterhalt|finanzielle mittel)\b",
+        q,
+    ))
+    return has_student_context and has_finance_context
+
+
 def _post_study_topic(query: str) -> bool:
     q = _normalize(query)
     return bool(re.search(r"\b(after studies|after graduation|post study|post-study|rules after studies|nach dem studium|studienabschluss|abschluss.*stud)\b", q))
@@ -1137,6 +1150,8 @@ def _grounded_fallback(query: str, sources: list[dict], reason: str, trace: list
 def _extractive_answer(query: str, sources: list[dict], language: str) -> str:
     if sources and _post_study_topic(query):
         return _post_study_answer(language)
+    if sources and _student_finance_topic(query):
+        return _generic_extractive_answer(query, sources, language)
     if sources and _student_visa_topic(query):
         return _student_visa_answer(language)
     if not sources or not _registration_topic(query):

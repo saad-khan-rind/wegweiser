@@ -99,6 +99,7 @@ def health() -> dict:
         "documents": store.list(1),
         "llm": llm.available(),
         "use_web": os.getenv("AGENT_USE_WEB", "1") == "1",
+        "langchain_context": agent.langchain_available(),
     }
 
 

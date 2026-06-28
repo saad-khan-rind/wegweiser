@@ -141,14 +141,13 @@ export class ChatService {
     const ai = await this.callGuidedOptionsAgent(nodeId, answers, contextPath, req.region, language);
     if (ai) return ai;
 
-    const fallbackOptions = fallbackGuidedOptions(nodeId, answers, language);
     return {
       nodeId,
-      options: fallbackOptions,
+      options: [],
       generatedAt: new Date().toISOString(),
-      provider: "api-safety-fallback",
+      provider: "ai-unavailable",
       sources: [],
-      trace: ["AI option service unavailable; returned conservative safety-filtered options"],
+      trace: ["AI option service unavailable; no static visa or residence options were generated"],
     };
   }
 
@@ -323,7 +322,7 @@ export class ChatService {
       clearTimeout(t);
       if (!res.ok) throw new Error(`guided-flow options status ${res.status}`);
       const d: any = await res.json();
-      const options = sanitizeGuidedOptions(d.options, answers, language);
+      const options = sanitizeGuidedOptions(d.options, nodeId, language);
       const sources: Source[] = (Array.isArray(d.sources) ? d.sources : []).map((s: any) => ({
         id: s.id || undefined,
         title: String(s.title ?? "source"),
@@ -342,7 +341,7 @@ export class ChatService {
         trace: Array.isArray(d.trace) ? d.trace.map((x: any) => String(x)) : [],
       };
     } catch (e) {
-      this.log.warn(`Guided option service unavailable: ${(e as Error).message}. Falling back.`);
+      this.log.warn(`Guided option service unavailable: ${(e as Error).message}. Returning no verified options.`);
       return null;
     }
   }
@@ -565,7 +564,7 @@ function guidedTags(answers: Record<string, unknown>): string[] {
   return Array.from(tags);
 }
 
-function sanitizeGuidedOptions(input: unknown, answers: Record<string, unknown>, language: "en" | "de"): GuidedFlowOption[] {
+function sanitizeGuidedOptions(input: unknown, nodeId: string, language: "en" | "de"): GuidedFlowOption[] {
   if (!Array.isArray(input)) return [];
   return input
     .map((item: any) => ({
@@ -574,12 +573,11 @@ function sanitizeGuidedOptions(input: unknown, answers: Record<string, unknown>,
       helper: deidentify(String(item?.helper ?? item?.description ?? "")).slice(0, 240),
       icon: cleanShort(item?.icon || "Sparkles"),
       badge: deidentify(String(item?.badge ?? "")).slice(0, 80),
-      next: cleanShort(item?.next || defaultNextForOption(item?.value)),
+      next: cleanShort(item?.next || defaultNextForGuidedNode(nodeId)),
       set: item?.set && typeof item.set === "object" && !Array.isArray(item.set) ? sanitizeGuidedAnswers(item.set) : undefined,
       source: deidentify(String(item?.source ?? "")).slice(0, 160),
     }))
     .filter((item) => item.value && item.label)
-    .filter((item) => guidedOptionAllowed(item.value, answers))
     .slice(0, 9)
     .map((item) => ({
       ...item,
@@ -587,64 +585,13 @@ function sanitizeGuidedOptions(input: unknown, answers: Record<string, unknown>,
     }));
 }
 
-function guidedOptionAllowed(value: string, answers: Record<string, unknown>): boolean {
-  const age = Number(answers.age);
-  if (!Number.isFinite(age) || age >= 18) return true;
-  return ![
-    "student",
-    "vocational_training",
-    "skilled_work",
-    "blue_card",
-    "opportunity_card",
-    "self_employment",
-    "job_offer",
-    "university_admission",
-    "training_contract",
-    "employment_contract",
-    "qualification_proof",
-  ].includes(value);
-}
-
-function defaultNextForOption(value: unknown): string {
-  const v = String(value ?? "");
-  if (v.includes("document")) return "ai-result";
+function defaultNextForGuidedNode(nodeId: string): string {
+  if (nodeId === "planning-visa") return "planning-readiness";
+  if (nodeId === "planning-readiness") return "planning-documents";
+  if (nodeId === "current-status") return "current-goal";
+  if (nodeId === "current-goal") return "current-documents";
+  if (nodeId === "planning-documents" || nodeId === "current-documents") return "ai-result";
   return "";
-}
-
-function fallbackGuidedOptions(nodeId: string, answers: Record<string, unknown>, language: "en" | "de"): GuidedFlowOption[] {
-  const de = language === "de";
-  const age = Number(answers.age);
-  const minor = Number.isFinite(age) && age < 18;
-  const label = (en: string, german: string) => (de ? german : en);
-  const checked = label("AI safety fallback", "AI-Sicherheitsfallback");
-
-  const options: Record<string, GuidedFlowOption[]> = {
-    "planning-visa": minor
-      ? [
-          { value: "family", label: label("Family reunification for a child", "Familiennachzug fuer ein Kind"), helper: label("For minors joining parents or guardians in Germany.", "Fuer Minderjaehrige, die zu Eltern oder Sorgeberechtigten ziehen."), icon: "Users", next: "planning-readiness", badge: checked },
-          { value: "school", label: label("School or supervised stay", "Schule oder betreuter Aufenthalt"), helper: label("Requires guardian and school/program context.", "Braucht Sorgeberechtigte und Schul-/Programmkontext."), icon: "GraduationCap", next: "planning-readiness", badge: checked },
-          { value: "asylum", label: label("Protection or asylum", "Schutz oder Asyl"), helper: label("Sensitive route; human counseling is recommended.", "Sensibler Weg; Beratung ist empfohlen."), icon: "ShieldCheck", next: "planning-readiness", badge: checked },
-          { value: "counselor", label: label("Talk to a counselor first", "Erst mit Beratung sprechen"), helper: label("For a child or unclear case, get human support first.", "Bei Kindern oder unklarer Lage zuerst menschliche Hilfe holen."), icon: "Lightbulb", next: "planning-readiness", badge: checked },
-        ]
-      : [
-          { value: "student", label: label("Student visa", "Studentenvisum"), helper: label("For higher education study or prep.", "Fuer Hochschulstudium oder Vorbereitung."), icon: "GraduationCap", next: "planning-readiness", badge: checked },
-          { value: "vocational_training", label: label("Vocational training visa", "Visum zur Ausbildung"), helper: label("For Ausbildung or training contracts.", "Fuer Ausbildung oder Ausbildungsvertrag."), icon: "BriefcaseBusiness", next: "planning-readiness", badge: checked },
-          { value: "skilled_work", label: label("Skilled worker visa", "Fachkraeftevisum"), helper: label("For recognized qualifications and a qualified job.", "Fuer anerkannte Qualifikation und qualifizierte Arbeit."), icon: "BadgeCheck", next: "planning-readiness", badge: checked },
-          { value: "blue_card", label: label("EU Blue Card", "Blaue Karte EU"), helper: label("For qualified employment with salary requirements.", "Fuer qualifizierte Beschaeftigung mit Gehaltsanforderungen."), icon: "Sparkles", next: "planning-readiness", badge: checked },
-          { value: "opportunity_card", label: label("Opportunity Card", "Chancenkarte"), helper: label("For job search if criteria are met.", "Zur Jobsuche, wenn Kriterien erfuellt sind."), icon: "Search", next: "planning-readiness", badge: checked },
-          { value: "family", label: label("Family reunification", "Familiennachzug"), helper: label("For joining close family in Germany.", "Zum Nachzug zu enger Familie in Deutschland."), icon: "Users", next: "planning-readiness", badge: checked },
-        ],
-    "planning-readiness": minor
-      ? [
-          { value: "family_invitation", label: label("Family in Germany", "Familie in Deutschland"), helper: label("A parent or guardian is already in Germany.", "Ein Elternteil oder Vormund ist in Deutschland."), next: "planning-documents", badge: checked },
-          { value: "school_acceptance", label: label("School/program acceptance", "Schul-/Programmzusage"), helper: label("A school, exchange, or supervised program is involved.", "Eine Schule, ein Austausch oder betreutes Programm ist beteiligt."), next: "planning-documents", badge: checked },
-          { value: "guardian_support", label: label("Guardian support", "Unterstuetzung durch Sorgeberechtigte"), helper: label("A legal guardian can support the application.", "Ein gesetzlicher Vormund kann unterstuetzen."), next: "planning-documents", badge: checked },
-          { value: "still_exploring", label: label("Still exploring", "Noch am Vergleichen"), helper: label("You need to compare safe routes first.", "Du musst sichere Wege zuerst vergleichen."), next: "planning-documents", badge: checked },
-        ]
-      : [],
-  };
-
-  return (options[nodeId] ?? []).filter((option) => guidedOptionAllowed(option.value, answers));
 }
 
 function sanitizeClarifyingAnswers(input: unknown): Record<string, string> {

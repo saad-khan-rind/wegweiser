@@ -340,6 +340,42 @@ function resolveAnsweredQuestions(defs, answers) {
     })
 }
 
+function compactFollowUps(followUpPrompts = []) {
+  return followUpPrompts
+    .map((f) => (typeof f === 'string' ? f : f?.text))
+    .filter(Boolean)
+    .slice(-8)
+}
+
+function buildAssistantExtraContext({ intent, originalPrompt, answers, followUpPrompts, questionDefs }) {
+  const answeredQuestions = resolveAnsweredQuestions(questionDefs, answers)
+  const followUps = compactFollowUps(followUpPrompts)
+  const lines = [
+    'Assistant session context:',
+    `- intent: ${intent || 'general'}`,
+  ]
+
+  if (originalPrompt) {
+    lines.push(`- original goal: ${originalPrompt}`)
+  }
+
+  if (answeredQuestions.length) {
+    lines.push('Answered clarifying questions:')
+    for (const item of answeredQuestions) {
+      lines.push(`- ${item.question}: ${item.answerLabel}`)
+    }
+  }
+
+  if (followUps.length) {
+    lines.push('Previous follow-up prompts:')
+    followUps.forEach((text, index) => {
+      lines.push(`${index + 1}. ${text}`)
+    })
+  }
+
+  return lines.join('\n').slice(0, 2400)
+}
+
 /**
  * Calls POST /api/chat and maps the response into the shape the assistant UI
  * already understands ({ meta, status, intro, contextSummary, guidedQuestions,
@@ -354,11 +390,13 @@ export async function requestAssistant({
   language = 'en',
   region = '',
   questionDefs = [],
+  originalPrompt = '',
 }) {
   const code = lang(language)
   const s = STRINGS[code]
   const meta = { requestId: uuid(), generatedAt: new Date().toISOString(), intent, version: '1.0' }
   const base = apiBase()
+  const extraContext = buildAssistantExtraContext({ intent, originalPrompt, answers, followUpPrompts, questionDefs })
 
   let data = null
   if (base) {
@@ -373,6 +411,7 @@ export async function requestAssistant({
           tags: [],
           region,
           language: code,
+          extraContext,
           clarifyingAnswers: answers,
         }),
         signal: ctrl.signal,
@@ -386,7 +425,7 @@ export async function requestAssistant({
 
   // Service unreachable / not configured → graceful, still-functional fallback.
   if (!data) {
-    const followUps = followUpPrompts.map((f) => (typeof f === 'string' ? f : f.text))
+    const followUps = compactFollowUps(followUpPrompts)
     const contextSummary = {
       userPrompt: prompt,
       intent,
@@ -422,7 +461,7 @@ export async function requestAssistant({
 
   const newDefs = mapClarifyingQuestions(data.clarifyingQuestions)
   const mergedDefs = mergeQuestionDefs(questionDefs, newDefs)
-  const followUps = followUpPrompts.map((f) => (typeof f === 'string' ? f : f.text))
+  const followUps = compactFollowUps(followUpPrompts)
   const contextSummary = {
     userPrompt: prompt,
     intent,

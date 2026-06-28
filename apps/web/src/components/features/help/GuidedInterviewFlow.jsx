@@ -127,6 +127,12 @@ function optionBadge(option, t) {
   return option?.badge ?? (option?.badgeKey ? t(option.badgeKey) : '')
 }
 
+function optionProviderLabel(provider, t) {
+  if (!provider || provider === 'none' || provider === 'local-structure') return ''
+  if (provider === 'ai-unavailable') return t('auslander.bubble.aiUnavailable')
+  return t('auslander.bubble.aiOptions')
+}
+
 function TrailBubble({ item, index }) {
   const side = pathSide(index)
 
@@ -137,7 +143,7 @@ function TrailBubble({ item, index }) {
       transition={{ duration: 0.28 }}
       className={`relative z-10 flex ${side}`}
     >
-      <div className="max-w-[min(100%,28rem)] rounded-[999px] border border-white/80 bg-white/95 px-7 py-5 shadow-[0_14px_35px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/80">
+      <div className="max-w-[min(100%,28rem)] rounded-[999px] border border-white/80 bg-white/95 px-7 py-5 shadow-[0_18px_42px_rgba(15,23,42,0.09)] ring-1 ring-slate-200/80">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
           {item.question}
         </p>
@@ -202,6 +208,7 @@ function ActiveBubble({
   const style = toneFor(node.tone)
   const [numberValue, setNumberValue] = useState('')
   const [selectedValues, setSelectedValues] = useState([])
+  const providerLabel = optionProviderLabel(optionMeta?.provider, t)
 
   useEffect(() => {
     if (node.type === 'number') setNumberValue(answers[node.answerKey] ?? '')
@@ -253,11 +260,9 @@ function ActiveBubble({
         </div>
       </div>
 
-      {optionMeta?.provider && node.type !== 'number' && (
+      {providerLabel && node.type !== 'number' && (
         <p className="mt-4 w-fit rounded-full border border-slate-200 bg-white/70 px-3 py-1 text-xs font-semibold text-slate-500">
-          {optionMeta.provider === 'local-safety-fallback'
-            ? t('auslander.bubble.aiFallback')
-            : t('auslander.bubble.aiOptions')}
+          {providerLabel}
         </p>
       )}
 
@@ -307,6 +312,11 @@ function ActiveBubble({
                 t={t}
               />
             ))}
+            {!optionsLoading && options.length === 0 && (
+              <div className="col-span-full rounded-[2rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-semibold text-amber-800">
+                {t('auslander.bubble.noOptions')}
+              </div>
+            )}
           </div>
           <div className="mt-5 flex flex-col gap-3 sm:flex-row">
             <Button
@@ -319,7 +329,7 @@ function ActiveBubble({
             </Button>
             <Button
               onClick={() => onAnswer(selectedValues)}
-              disabled={loading || optionsLoading}
+              disabled={loading || optionsLoading || (node.requiresAiOptions && options.length === 0)}
               className="flex-1"
             >
               {loading ? t('common.loading') : t('auslander.bubble.continue')}
@@ -551,8 +561,8 @@ export function GuidedInterviewFlow() {
         setOptionMeta(payload ?? null)
       } catch {
         if (!cancelled) {
-          setDynamicOptions(getGuidedNodeOptions(activeBubble, answers))
-          setOptionMeta({ provider: 'local-safety-fallback' })
+          setDynamicOptions(activeBubble.requiresAiOptions ? [] : getGuidedNodeOptions(activeBubble, answers))
+          setOptionMeta({ provider: activeBubble.requiresAiOptions ? 'ai-unavailable' : 'local-structure' })
         }
       } finally {
         if (!cancelled) setOptionsLoading(false)
@@ -656,9 +666,9 @@ export function GuidedInterviewFlow() {
       <div
         ref={panelRef}
         tabIndex={-1}
-        className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-[radial-gradient(circle_at_top_left,#dbeafe_0,#f8fafc_34%,#ecfdf5_72%,#fff7ed_100%)] px-4 py-6 outline-none sm:px-6 sm:py-8"
+        className="relative min-h-[68vh] overflow-hidden rounded-[2.25rem] bg-[#f7faf9] px-4 py-6 outline-none ring-1 ring-slate-200 sm:px-6 sm:py-8"
       >
-        <div className="pointer-events-none absolute left-1/2 top-8 h-[calc(100%-4rem)] w-px -translate-x-1/2 bg-gradient-to-b from-sky-200 via-emerald-200 to-amber-200" />
+        <div className="pointer-events-none absolute left-1/2 top-8 h-[calc(100%-4rem)] w-px -translate-x-1/2 bg-[repeating-linear-gradient(to_bottom,rgba(56,189,248,0.42)_0,rgba(56,189,248,0.42)_10px,transparent_10px,transparent_22px)]" />
         <div className="relative space-y-5 sm:space-y-6">
           <AnimatePresence initial={false}>
             {bubblePath.map((item, index) => (

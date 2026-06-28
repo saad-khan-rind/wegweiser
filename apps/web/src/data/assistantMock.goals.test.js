@@ -1,7 +1,7 @@
 // Feature: guided-navigator-revamp, Property 2: Goal-tile mapping is deterministic and well-formed
 import { describe, it, expect } from 'vitest'
 import fc from 'fast-check'
-import { GOAL_TILES, detectIntent } from './assistantMock'
+import { GOAL_TILES, buildSummaryCard, detectIntent } from './assistantMock'
 
 const DEFINED_INTENTS = ['residence', 'anmeldung', 'work', 'general']
 
@@ -61,5 +61,19 @@ describe('Property 2: Goal-tile mapping is deterministic and well-formed', () =>
     expect(ids).toContain('first_residence')
     expect(ids).toContain('register_address')
     expect(ids).toContain('renew_permit')
+  })
+
+  it('dedupes repeated cards in the pinned summary model', () => {
+    const summary = buildSummaryCard({
+      goalLabel: 'What is the blocked amount for student visa?',
+      cards: [
+        { id: 'overview', title: 'Summary', category: 'summary', classification: 'advisable' },
+        { id: 'documents', title: 'Documents to prepare', category: 'documents', classification: 'actionable' },
+        { id: 'overview', title: 'Summary', category: 'summary', classification: 'advisable' },
+        { id: 'documents', title: 'Documents to prepare', category: 'documents', classification: 'actionable' },
+      ],
+    })
+
+    expect(summary.steps.map((step) => step.title)).toEqual(['Summary', 'Documents to prepare'])
   })
 })

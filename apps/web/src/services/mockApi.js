@@ -5,9 +5,8 @@ import {
   buildGuidedTrailLabel,
   getGuidedNode,
   getGuidedNodeOptions,
-  getLocalGuidedFallbackOptions,
 } from '../data/guidedFlow'
-import { resolveRequiredDocuments, unlockNodesFromProfile } from '../data/documentRules'
+import { unlockNodesFromProfile } from '../data/documentRules'
 import { TOTAL_AUSLANDER_STEPS } from '../data/auslanderInterview'
 import { detectIntent, buildSummaryCard, orderActionCards } from '../data/assistantMock'
 import { requestAssistant, requestGuidedFlowAdvice, requestGuidedFlowOptions } from './apiClient'
@@ -162,99 +161,25 @@ function compactValue(value) {
   return String(value)
 }
 
-function buildLocalGuidedAdvice({ answers = {}, path = [], locale = DEFAULT_LOCALE }) {
+function buildUnavailableGuidedAdvice({ path = [], locale = DEFAULT_LOCALE }) {
   const isGerman = locale === 'de'
   const title = buildGuidedTrailLabel(path) || (isGerman ? 'Gefuehrter Weg' : 'Guided path')
-  const docs = resolveRequiredDocuments(answers)
-  const missing = docs.filter((doc) => !doc.hasDocument)
-  const ready = docs.filter((doc) => doc.hasDocument)
-  const isPlanning = answers.locationIntent === 'planning_move'
-  const ageLine = answers.age
-    ? isGerman
-      ? `Alter: ${answers.age}`
-      : `Age: ${answers.age}`
-    : ''
-
-  const intro = isGerman
-    ? 'Ich habe deine Bubble-Antworten zu einem ersten Plan zusammengefasst.'
-    : 'I turned your bubble answers into a first plan.'
-
-  const summaryBody = [
-    isPlanning
-      ? isGerman
-        ? 'Du planst den Umzug nach Deutschland.'
-        : 'You are planning to move to Germany.'
-      : isGerman
-        ? 'Du bist bereits in Deutschland.'
-        : 'You are already in Germany.',
-    ageLine,
-    title ? `${isGerman ? 'Pfad' : 'Path'}: ${title}.` : '',
-  ].filter(Boolean).join(' ')
+  const body = isGerman
+    ? 'Ich habe deinen Bubble-Pfad, aber der AI/RAG-Dienst konnte gerade keine quellenbasierte Anleitung erzeugen. Es wurde kein lokaler Visa-Plan erfunden.'
+    : 'I have your bubble trail, but the AI/RAG service could not generate source-grounded guidance right now. No local visa plan was invented.'
 
   const cards = [
     {
-      id: 'guided-overview',
-      title: isGerman ? 'Deine Situation' : 'Your situation',
-      description: summaryBody,
-      icon: 'Sparkles',
+      id: 'guided-ai-unavailable',
+      title: isGerman ? 'AI/RAG nicht verfuegbar' : 'AI/RAG unavailable',
+      description: body,
+      icon: 'AlertCircle',
       status: 'recommended',
-      category: 'summary',
+      category: 'other',
       classification: 'advisable',
-      content: { body: summaryBody },
-    },
-    {
-      id: 'guided-next-steps',
-      title: isGerman ? 'Naechste Schritte' : 'Next steps',
-      description: isGerman
-        ? 'Starte mit der passenden Visum- oder Aufenthaltsspur und pruefe danach Termine und Unterlagen.'
-        : 'Start with the closest visa or residence path, then check appointments and documents.',
-      icon: 'ListChecks',
-      status: 'ready',
-      category: 'process',
-      classification: 'actionable',
-      content: {
-        steps: [
-          isPlanning
-            ? isGerman
-              ? 'Pruefe die passende Visumkategorie bei der deutschen Auslandsvertretung.'
-              : 'Check the matching visa category at the German mission responsible for you.'
-            : isGerman
-              ? 'Pruefe die passende Aufenthaltsspur bei deiner Auslaenderbehoerde.'
-              : 'Check the matching residence path with your local immigration office.',
-          isGerman
-            ? 'Sammle Nachweise, die zu deinem Zweck passen.'
-            : 'Collect proof documents that match your purpose.',
-          isGerman
-            ? 'Lass die AI-Antwort mit offiziellen Quellen bestaetigen, sobald der Dienst erreichbar ist.'
-            : 'Use the AI answer with official sources once the service is reachable.',
-        ],
-      },
+      content: { body },
     },
   ]
-
-  if (docs.length) {
-    cards.push({
-      id: 'guided-documents',
-      title: isGerman ? 'Dokumentenstand' : 'Document status',
-      description: missing.length
-        ? isGerman
-          ? `${missing.length} Unterlagen fehlen wahrscheinlich noch.`
-          : `${missing.length} document(s) are likely still missing.`
-        : isGerman
-          ? 'Die wichtigsten Unterlagen sind markiert.'
-          : 'Your key documents are marked as ready.',
-      icon: 'FileText',
-      status: missing.length ? 'recommended' : 'ready',
-      category: 'documents',
-      classification: 'actionable',
-      content: {
-        items: [
-          ...missing.map((doc) => ({ text: doc.id, status: 'warning' })),
-          ...ready.map((doc) => ({ text: doc.id, status: 'ready' })),
-        ],
-      },
-    })
-  }
 
   const contextSummary = {
     userPrompt: title,
@@ -276,7 +201,7 @@ function buildLocalGuidedAdvice({ answers = {}, path = [], locale = DEFAULT_LOCA
       version: 'local',
     },
     status: 'completed',
-    intro,
+    intro: body,
     contextSummary,
     cards,
     walletBundle: {
@@ -286,7 +211,7 @@ function buildLocalGuidedAdvice({ answers = {}, path = [], locale = DEFAULT_LOCA
       contextSummary,
       cards,
     },
-    escalate: false,
+    escalate: true,
   }
 }
 
@@ -339,6 +264,7 @@ export const apiService = {
       bubblePath: [],
       answers: {},
       guidedAdvice: null,
+      optionCache: {},
       completed: false,
     }
     writeStorage(session)
@@ -356,25 +282,47 @@ export const apiService = {
       return { options: [], provider: 'none', generatedAt: new Date().toISOString() }
     }
 
+    if (!node.requiresAiOptions) {
+      const payload = {
+        options: getGuidedNodeOptions(node, helpFlow.answers ?? {}),
+        provider: 'local-structure',
+        generatedAt: new Date().toISOString(),
+        sources: [],
+        trace: ['Static context question; no legal options generated locally.'],
+      }
+      helpFlow.optionCache = {
+        ...(helpFlow.optionCache ?? {}),
+        [node.id]: payload,
+      }
+      session.helpFlow = helpFlow
+      writeStorage(session)
+      return payload
+    }
+
     const live = await requestGuidedFlowOptions({
       nodeId: node.id,
       answers: helpFlow.answers ?? {},
       path: helpFlow.bubblePath ?? [],
       language: session.locale ?? DEFAULT_LOCALE,
     })
-    const fallback = getLocalGuidedFallbackOptions(node.id, helpFlow.answers ?? {})
-    const options = getGuidedNodeOptions(
-      node,
-      helpFlow.answers ?? {},
-      live?.options?.length ? live.options : fallback,
-    )
+    const hasLiveOptions = Array.isArray(live?.options) && live.options.length > 0
+    const options = hasLiveOptions
+      ? getGuidedNodeOptions(node, helpFlow.answers ?? {}, live.options)
+      : []
 
     const payload = {
       options,
-      provider: live?.provider ?? (fallback ? 'local-safety-fallback' : 'local-node-fallback'),
+      provider: hasLiveOptions
+        ? (live?.provider ?? 'guided-ai')
+        : 'ai-unavailable',
       generatedAt: live?.generatedAt ?? new Date().toISOString(),
       sources: live?.sources ?? [],
-      trace: live?.trace ?? [],
+      trace: hasLiveOptions
+        ? (live?.trace ?? [])
+        : [
+            ...(live?.trace ?? []),
+            'AI/RAG did not return verified options; no local visa fallback was used.',
+          ],
     }
 
     helpFlow.optionCache = {
@@ -493,8 +441,7 @@ export const apiService = {
         path,
         language: session.locale ?? DEFAULT_LOCALE,
       })) ??
-      buildLocalGuidedAdvice({
-        answers,
+      buildUnavailableGuidedAdvice({
         path,
         locale: session.locale ?? DEFAULT_LOCALE,
       })
@@ -737,6 +684,7 @@ export const apiService = {
       followUpPrompts: activeSession.followUpPrompts ?? [],
       language: session.locale ?? DEFAULT_LOCALE,
       questionDefs: activeSession.guidedQuestionDefs ?? [],
+      originalPrompt: activeSession.originalPrompt ?? prompt,
     })
     activeSession.guidedQuestionDefs = questionDefs
 
@@ -805,6 +753,7 @@ export const apiService = {
       followUpPrompts: activeSession.followUpPrompts ?? [],
       language: session.locale ?? DEFAULT_LOCALE,
       questionDefs: activeSession.guidedQuestionDefs ?? [],
+      originalPrompt: activeSession.originalPrompt,
     })
     activeSession.guidedQuestionDefs = questionDefs
 

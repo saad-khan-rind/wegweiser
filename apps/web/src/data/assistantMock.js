@@ -64,6 +64,18 @@ export function orderActionCards(cards) {
     .map((entry) => entry.card)
 }
 
+function dedupeCards(cards) {
+  const seen = new Set()
+  const out = []
+  for (const card of Array.isArray(cards) ? cards : []) {
+    const key = String(card?.id || card?.title || '').trim().toLowerCase()
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    out.push(card)
+  }
+  return out
+}
+
 /**
  * Derives a simple urgency indicator. With live backend answers we no longer
  * have a structured deadline field, so urgency is driven by the backend's
@@ -125,7 +137,7 @@ export function buildSummaryCard({
   const hasGoal = Boolean(goalLabel)
   const empty = !hasGoal && normalizedAnswered.length === 0
 
-  const orderedCards = orderActionCards(cards)
+  const orderedCards = orderActionCards(dedupeCards(cards))
   const topActionable = orderedCards.find((card) => card?.classification === 'actionable')
 
   // A compact overview of the whole guide — every step in canonical order.

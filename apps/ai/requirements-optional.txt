@@ -3,3 +3,5 @@
 pinecone>=5.0,<10
 pypdf>=4.2,<7
 ddgs>=9.0,<10
+langchain>=0.3,<0.4
+langchain-community>=0.3,<0.4

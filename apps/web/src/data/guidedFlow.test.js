@@ -1,16 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { getGuidedNode, getGuidedNodeOptions } from './guidedFlow'
 
-describe('guided bubble option safety', () => {
-  it('does not show adult study or work visa paths for a 10 year old', () => {
+describe('guided bubble dynamic options', () => {
+  it('does not invent visa options locally when AI/RAG has not returned options', () => {
     const node = getGuidedNode('planning-visa')
     const options = getGuidedNodeOptions(node, { age: 10, locationIntent: 'planning_move' })
-    const values = options.map((option) => option.value)
 
-    expect(values).not.toContain('student')
-    expect(values).not.toContain('skilled_work')
-    expect(values).not.toContain('blue_card')
-    expect(values).not.toContain('opportunity_card')
-    expect(values).toContain('family')
+    expect(options).toEqual([])
+  })
+
+  it('renders only the AI/RAG options supplied by the backend', () => {
+    const node = getGuidedNode('planning-visa')
+    const options = getGuidedNodeOptions(node, { age: 10, locationIntent: 'planning_move' }, [
+      { value: 'family_child', label: 'Family route for a child', next: 'planning-readiness' },
+    ])
+
+    expect(options).toEqual([
+      { value: 'family_child', label: 'Family route for a child', next: 'planning-readiness' },
+    ])
   })
 })

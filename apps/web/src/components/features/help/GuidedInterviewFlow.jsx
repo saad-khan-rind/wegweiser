@@ -380,16 +380,22 @@ function ActiveBubble({
   )
 }
 
-function AdviceBubble({ card, index }) {
+function AdviceBubble({ card, index, cardCount }) {
   const Icon = ICONS[card.icon] ?? Sparkles
+  const bodyText = card.content?.body || card.description
+  const staggerClass =
+    cardCount > 2
+      ? index % 2 === 0
+        ? 'sm:translate-y-2'
+        : 'sm:-translate-y-2'
+      : ''
+
   return (
     <motion.article
       initial={{ opacity: 0, y: 18, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.25, delay: index * 0.04 }}
-      className={`relative rounded-[2.5rem] border border-white/80 bg-white/95 p-5 shadow-[0_16px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 ${
-        index % 2 === 0 ? 'sm:translate-y-2' : 'sm:-translate-y-2'
-      }`}
+      className={`relative h-full rounded-[2.5rem] border border-white/80 bg-white/95 p-5 shadow-[0_16px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 ${staggerClass}`}
     >
       <div className="flex items-start gap-3">
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-civic-purple-light text-civic-purple">
@@ -397,7 +403,11 @@ function AdviceBubble({ card, index }) {
         </span>
         <div className="min-w-0">
           <h3 className="text-base font-black leading-tight text-charcoal">{card.title}</h3>
-          <p className="mt-2 text-sm leading-relaxed text-slate-500">{card.description}</p>
+          {bodyText && (
+            <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-500">
+              {bodyText}
+            </p>
+          )}
         </div>
       </div>
       {card.content?.steps?.length > 0 && (
@@ -508,9 +518,14 @@ function ResultBubble({ path, advice, loading, onGenerate, t }) {
           {advice.intro && (
             <p className="mb-4 text-sm font-semibold text-charcoal">{advice.intro}</p>
           )}
-          <div className="grid gap-4 lg:grid-cols-2">
-            {(advice.cards ?? []).map((card, index) => (
-              <AdviceBubble key={card.id ?? index} card={card} index={index} />
+          <div className="grid items-stretch gap-4 lg:grid-cols-2">
+            {(advice.cards ?? []).map((card, index, cards) => (
+              <AdviceBubble
+                key={card.id ?? index}
+                card={card}
+                index={index}
+                cardCount={cards.length}
+              />
             ))}
           </div>
         </div>

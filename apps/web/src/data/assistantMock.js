@@ -104,6 +104,7 @@ function summaryUrgency(escalate, language) {
  *   cards?: Array<object>,
  *   escalate?: boolean,
  *   language?: string,
+ *   discussionCity?: string,
  * }} [params]
  */
 export function buildSummaryCard({
@@ -111,7 +112,8 @@ export function buildSummaryCard({
   answeredQuestions = [],
   cards = [],
   escalate = false,
-  language = 'de',
+  language = 'en',
+  discussionCity = 'München',
 } = {}) {
   const normalizedAnswered = (answeredQuestions ?? []).map((q) => ({
     questionId: q.questionId,
@@ -148,6 +150,7 @@ export function buildSummaryCard({
     kind: 'summary',
     empty,
     goalLabel: goalLabel ?? null,
+    discussionCity,
     answeredQuestions: normalizedAnswered,
     steps,
     verdict,

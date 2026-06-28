@@ -11,6 +11,7 @@ import de from './locales/de.json'
 import en from './locales/en.json'
 
 const LOCALES = { en, de }
+const DEFAULT_LOCALE = 'en'
 
 const LocaleContext = createContext(null)
 
@@ -24,25 +25,33 @@ function interpolate(template, params = {}) {
 }
 
 export function LocaleProvider({ children }) {
-  const [locale, setLocaleState] = useState('de')
+  const [locale, setLocaleState] = useState(DEFAULT_LOCALE)
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    apiService.fetchLocale().then((saved) => {
-      setLocaleState(saved)
-      setReady(true)
-    })
+    apiService
+      .fetchLocale()
+      .then((saved) => {
+        const next = LOCALES[saved] ? saved : DEFAULT_LOCALE
+        setLocaleState(next)
+        document.documentElement.lang = next
+      })
+      .catch(() => {
+        document.documentElement.lang = DEFAULT_LOCALE
+      })
+      .finally(() => setReady(true))
   }, [])
 
   const setLocale = useCallback(async (next) => {
-    setLocaleState(next)
-    await apiService.saveLocale(next)
-    document.documentElement.lang = next
+    const safeLocale = LOCALES[next] ? next : DEFAULT_LOCALE
+    setLocaleState(safeLocale)
+    await apiService.saveLocale(safeLocale)
+    document.documentElement.lang = safeLocale
   }, [])
 
   const t = useCallback(
     (key, params) => {
-      const strings = LOCALES[locale] ?? LOCALES.de
+      const strings = LOCALES[locale] ?? LOCALES[DEFAULT_LOCALE]
       const value = getNestedValue(strings, key) ?? getNestedValue(LOCALES.en, key) ?? key
       return typeof value === 'string' ? interpolate(value, params) : value
     },

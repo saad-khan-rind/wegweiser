@@ -6,8 +6,12 @@ import { requestAssistant } from './apiClient'
 
 const STORAGE_KEY = 'migrant_assistant_guest'
 const STORAGE_VERSION = 5
+const DEFAULT_LOCALE = 'en'
 
-const delay = (ms = 200) => new Promise((resolve) => setTimeout(resolve, ms))
+const delay = (ms = 200) =>
+  import.meta.env?.MODE === 'test'
+    ? Promise.resolve()
+    : new Promise((resolve) => setTimeout(resolve, ms))
 
 function readStorage() {
   const raw = localStorage.getItem(STORAGE_KEY)
@@ -58,7 +62,7 @@ function createDefaultSession() {
     schemaVersion: STORAGE_VERSION,
     sessionId: crypto.randomUUID(),
     mode: 'guest',
-    locale: 'de',
+    locale: DEFAULT_LOCALE,
     activeNodeId: null,
     helpFlow: defaultHelpFlow(),
     assistant: defaultAssistantState(),
@@ -84,7 +88,7 @@ function migrateSession(session) {
     return {
       ...createDefaultSession(),
       sessionId: session?.sessionId ?? crypto.randomUUID(),
-      locale: session?.locale ?? 'de',
+      locale: session?.locale ?? DEFAULT_LOCALE,
       createdAt: session?.createdAt ?? new Date().toISOString(),
     }
   }
@@ -101,6 +105,7 @@ function migrateSession(session) {
   if (!session.assistant) {
     session.assistant = defaultAssistantState()
   }
+  session.locale ??= DEFAULT_LOCALE
   if (!Array.isArray(session.assistant.sessions)) {
     session.assistant.sessions = []
   }
@@ -113,7 +118,6 @@ function migrateSession(session) {
     if (!assistantSession || typeof assistantSession !== 'object') continue
     assistantSession.intent ??= null
     assistantSession.cardCompletion ??= {}
-    assistantSession.guidedQuestionDefs ??= []
   }
 
   session.schemaVersion = STORAGE_VERSION
@@ -146,7 +150,10 @@ export const apiService = {
       writeStorage(session)
       return session
     }
-    const session = createDefaultSession()
+    const session = {
+      ...createDefaultSession(),
+      locale: existing?.locale ?? DEFAULT_LOCALE,
+    }
     writeStorage(session)
     return session
   },
@@ -330,7 +337,7 @@ export const apiService = {
   fetchLocale: async () => {
     await delay(100)
     const session = readStorage()
-    return session?.locale ?? 'de'
+    return session?.locale ?? DEFAULT_LOCALE
   },
 
   // --- Assistant workspace ---
@@ -409,7 +416,7 @@ export const apiService = {
       intent: activeSession.intent,
       answers: activeSession.guidedAnswers ?? {},
       followUpPrompts: activeSession.followUpPrompts ?? [],
-      language: session.locale ?? 'de',
+      language: session.locale ?? DEFAULT_LOCALE,
       questionDefs: activeSession.guidedQuestionDefs ?? [],
     })
     activeSession.guidedQuestionDefs = questionDefs
@@ -477,7 +484,7 @@ export const apiService = {
       intent: activeSession.intent,
       answers: activeSession.guidedAnswers,
       followUpPrompts: activeSession.followUpPrompts ?? [],
-      language: session.locale ?? 'de',
+      language: session.locale ?? DEFAULT_LOCALE,
       questionDefs: activeSession.guidedQuestionDefs ?? [],
     })
     activeSession.guidedQuestionDefs = questionDefs
@@ -613,7 +620,7 @@ export const apiService = {
         [],
       cards: latest?.cards ?? [],
       escalate: latest?.escalate ?? false,
-      language: session.locale ?? 'de',
+      language: session.locale ?? DEFAULT_LOCALE,
     })
 
     const existing = assistant.wallet.find(
@@ -726,7 +733,7 @@ export const apiService = {
       helpCompleted: false,
       topics: [],
       wallet: [],
-      locale: 'de',
+      locale: DEFAULT_LOCALE,
     }
     const session = readStorage()
     if (!session) return empty
@@ -751,7 +758,7 @@ export const apiService = {
       helpCompleted: Boolean(migrated.helpFlow?.completed),
       topics,
       wallet: migrated.assistant?.wallet ?? [],
-      locale: migrated.locale ?? 'de',
+      locale: migrated.locale ?? DEFAULT_LOCALE,
     }
   },
 
@@ -784,4 +791,3 @@ export const apiService = {
     return fresh
   },
 }
-

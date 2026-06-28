@@ -15,6 +15,7 @@ export function FollowUpInput({
   const formRef = useRef(null)
   const inputRef = useRef(null)
   const [value, setValue] = useState('')
+  const [submittedValue, setSubmittedValue] = useState(null)
 
   // When the user taps "Ask about this card", the shared input gets a context
   // label — gently bring it into view (respecting the sticky header / bottom
@@ -26,11 +27,20 @@ export function FollowUpInput({
     }
   }, [contextLabel])
 
+  useEffect(() => {
+    if (!loading && submittedValue !== null) {
+      setValue('')
+      setSubmittedValue(null)
+    }
+  }, [loading, submittedValue])
+
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!value.trim() || loading) return
-    onSubmit(value.trim())
-    setValue('')
+    const nextValue = value.trim()
+    if (!nextValue || loading) return
+    setValue(nextValue)
+    setSubmittedValue(nextValue)
+    onSubmit(nextValue)
   }
 
   return (
@@ -68,8 +78,9 @@ export function FollowUpInput({
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder={t(placeholderKey)}
-          disabled={loading}
-          className="min-h-10 flex-1 bg-transparent text-sm text-charcoal placeholder:text-slate-400 focus:outline-none disabled:opacity-60"
+          readOnly={loading}
+          aria-busy={loading}
+          className="min-h-10 flex-1 bg-transparent text-sm text-charcoal placeholder:text-slate-400 focus:outline-none read-only:cursor-wait read-only:text-slate-600"
         />
         <button
           type="submit"

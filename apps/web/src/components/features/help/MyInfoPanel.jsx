@@ -224,7 +224,7 @@ export function MyInfoPanel({ open, onClose, onChanged }) {
           <Section icon={ShieldCheck} title={t('myInfo.preferences')}>
             <p className="text-sm text-charcoal">
               <span className="text-slate-500">{t('myInfo.language')}: </span>
-              <span className="font-semibold uppercase">{data?.locale ?? 'de'}</span>
+              <span className="font-semibold uppercase">{data?.locale ?? 'en'}</span>
             </p>
           </Section>
         </div>

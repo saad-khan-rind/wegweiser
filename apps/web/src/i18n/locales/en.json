@@ -3,6 +3,9 @@
     "title": "Migrant Assistant",
     "tagline": "Your journey. Our guidance."
   },
+  "language": {
+    "label": "Language"
+  },
   "landing": {
     "heroTitle": "Your guide through German bureaucracy",
     "heroSubtitle": "Step-by-step help for residence permits, registration, and more — on your terms.",
@@ -37,7 +40,7 @@
     },
     "privacyNote": "We respect your privacy. Guest data never leaves your device.",
     "goalsTitle": "What do you need help with?",
-    "freeTextLabel": "Or describe your situation in your own words",
+    "freeTextLabel": "Ask a question",
     "journey": {
       "arrival": "Arrival",
       "registration": "Registration",
@@ -188,7 +191,7 @@
       "subtitle": "Ask once, explore structured next steps as cards."
     },
     "session": {
-      "label": "Your topic"
+      "label": "Your situation"
     },
     "refine": {
       "progress": "{{current}} / {{total}} answered",
@@ -411,9 +414,9 @@
   "navigator": {
     "entry": {
       "title": "What do you want to navigate?",
-      "subtitle": "Pick a goal below or describe your situation in your own words — both get you started.",
-      "tileError": "This goal isn't available right now. Please try another or describe your situation below.",
-      "freeTextError": "Please enter between 1 and 1000 characters describing your situation."
+      "subtitle": "Pick a goal below or ask a specific question to get started.",
+      "tileError": "This goal isn't available right now. Please try another option.",
+      "freeTextError": "Please enter between 1 and 1000 characters."
     },
     "cardsHint": "Each step is a card. Tap to expand — your full guide stays right here.",
     "resultsHint": "Start with the summary, then work through the steps in order.",
@@ -466,14 +469,15 @@
     },
     "somethingElse": {
       "label": "Something else",
-      "description": "Describe your situation and we'll point you the right way."
+      "description": "Ask a specific question and we'll point you the right way."
     }
   },
   "summary": {
-    "title": "Your situation",
+    "title": "Summary",
     "goalLabel": "Your goal",
+    "cityLabel": "City in discussion",
     "verdictPrefix": "Do this next",
-    "empty": "No situation information yet. Pick a goal or describe your situation to get started.",
+    "empty": "No situation information yet. Pick a goal or ask a question to get started.",
     "urgency": {
       "urgent": "Urgent",
       "soon": "Act soon",

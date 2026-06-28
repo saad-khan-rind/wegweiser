@@ -5,15 +5,15 @@ import { STATUS_STYLES } from './assistantUtils'
 import { GuideAvatar } from './GuideAvatar'
 
 /**
- * A holistic recap of the user's guide, shown below the action cards (not
- * pinned). It summarizes the whole situation — selected goal, the single most
- * important next step, every step at a glance, and urgency — without repeating
- * the personal clarifying questions. It can be saved to the wallet.
+ * A holistic recap of the user's guide, pinned above the action cards. It
+ * summarizes the whole situation — selected goal, city, the single most
+ * important next step, every step at a glance, and urgency.
  *
  * @param {{
  *   summary: {
  *     empty: boolean,
  *     goalLabel: string|null,
+ *     discussionCity: string,
  *     steps: Array<{ id: string, title: string, classification: string }>,
  *     verdict: { text: string, fromCardId: string|null },
  *     urgency: { level: 'none'|'soon'|'urgent', label: string, detail: string|null, colorToken: string },
@@ -27,7 +27,7 @@ export function SummaryCard({ summary, onAddToWallet, inWallet = false }) {
 
   if (!summary) return null
 
-  const { empty, goalLabel, steps = [], verdict, urgency } = summary
+  const { empty, goalLabel, discussionCity, steps = [], verdict, urgency } = summary
   const verdictText = verdict?.text || (empty ? t('summary.empty') : '')
 
   return (
@@ -39,11 +39,21 @@ export function SummaryCard({ summary, onAddToWallet, inWallet = false }) {
         {t('summary.title')}
       </h2>
 
-      {goalLabel && (
-        <p className="mt-1 text-sm text-slate-600">
-          <span className="font-medium text-slate-500">{t('summary.goalLabel')}: </span>
-          <span className="font-semibold text-charcoal">{goalLabel}</span>
-        </p>
+      {(goalLabel || discussionCity) && (
+        <dl className="mt-2 grid gap-1 text-sm text-slate-600 sm:grid-cols-2">
+          {goalLabel && (
+            <div>
+              <dt className="inline font-medium text-slate-500">{t('summary.goalLabel')}: </dt>
+              <dd className="inline font-semibold text-charcoal">{goalLabel}</dd>
+            </div>
+          )}
+          {discussionCity && (
+            <div>
+              <dt className="inline font-medium text-slate-500">{t('summary.cityLabel')}: </dt>
+              <dd className="inline font-semibold text-charcoal">{discussionCity}</dd>
+            </div>
+          )}
+        </dl>
       )}
 
       {/* Verdict — the single most important next action, in Nav's voice */}

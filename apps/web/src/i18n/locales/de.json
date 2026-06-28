@@ -3,6 +3,9 @@
     "title": "Migrant Assistant",
     "tagline": "Ihre Reise. Unsere Begleitung."
   },
+  "language": {
+    "label": "Sprache"
+  },
   "landing": {
     "heroTitle": "Ihr Weg durch deutsche Behörden",
     "heroSubtitle": "Schritt-für-Schritt-Hilfe bei Aufenthaltserlaubnis, Anmeldung und mehr — ganz nach Ihren Bedürfnissen.",
@@ -37,7 +40,7 @@
     },
     "privacyNote": "Wir respektieren Ihre Privatsphäre. Gastdaten verlassen niemals Ihr Gerät.",
     "goalsTitle": "Wobei brauchen Sie Hilfe?",
-    "freeTextLabel": "Oder beschreiben Sie Ihre Situation in eigenen Worten",
+    "freeTextLabel": "Frage stellen",
     "journey": {
       "arrival": "Ankunft",
       "registration": "Anmeldung",
@@ -188,7 +191,7 @@
       "subtitle": "Einmal fragen, nächste Schritte als Karten erkunden."
     },
     "session": {
-      "label": "Ihr Thema"
+      "label": "Ihre Situation"
     },
     "refine": {
       "progress": "{{current}} / {{total}} beantwortet",
@@ -411,9 +414,9 @@
   "navigator": {
     "entry": {
       "title": "Wobei möchten Sie sich orientieren?",
-      "subtitle": "Wählen Sie unten ein Ziel oder beschreiben Sie Ihre Situation in eigenen Worten — beides bringt Sie weiter.",
-      "tileError": "Dieses Ziel ist derzeit nicht verfügbar. Bitte wählen Sie ein anderes oder beschreiben Sie Ihre Situation unten.",
-      "freeTextError": "Bitte geben Sie zwischen 1 und 1000 Zeichen ein, um Ihre Situation zu beschreiben."
+      "subtitle": "Wählen Sie unten ein Ziel oder stellen Sie eine konkrete Frage.",
+      "tileError": "Dieses Ziel ist derzeit nicht verfügbar. Bitte wählen Sie eine andere Option.",
+      "freeTextError": "Bitte geben Sie zwischen 1 und 1000 Zeichen ein."
     },
     "cardsHint": "Jeder Schritt ist eine Karte. Antippen zum Aufklappen — Ihr vollständiger Leitfaden bleibt hier.",
     "resultsHint": "Beginnen Sie mit der Zusammenfassung und arbeiten Sie die Schritte der Reihe nach ab.",
@@ -466,14 +469,15 @@
     },
     "somethingElse": {
       "label": "Etwas anderes",
-      "description": "Beschreiben Sie Ihre Situation und wir zeigen Ihnen den richtigen Weg."
+      "description": "Stellen Sie eine konkrete Frage und wir zeigen Ihnen den richtigen Weg."
     }
   },
   "summary": {
-    "title": "Ihre Situation",
+    "title": "Zusammenfassung",
     "goalLabel": "Ihr Ziel",
+    "cityLabel": "Besprochene Stadt",
     "verdictPrefix": "Das ist Ihr nächster Schritt",
-    "empty": "Noch keine Angaben zu Ihrer Situation. Wählen Sie ein Ziel oder beschreiben Sie Ihre Situation, um zu beginnen.",
+    "empty": "Noch keine Angaben zu Ihrer Situation. Wählen Sie ein Ziel oder stellen Sie eine Frage, um zu beginnen.",
     "urgency": {
       "urgent": "Dringend",
       "soon": "Bald handeln",

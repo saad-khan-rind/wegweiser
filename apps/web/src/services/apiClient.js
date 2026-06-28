@@ -351,7 +351,7 @@ export async function requestAssistant({
   intent = 'general',
   answers = {},
   followUpPrompts = [],
-  language = 'de',
+  language = 'en',
   region = '',
   questionDefs = [],
 }) {

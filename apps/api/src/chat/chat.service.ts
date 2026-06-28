@@ -141,13 +141,17 @@ export class ChatService {
     const ai = await this.callGuidedOptionsAgent(nodeId, answers, contextPath, req.region, language);
     if (ai) return ai;
 
+    const docs = this.knowledge.retrieveLocal(guidedOptionsQuery(nodeId, answers, contextPath), guidedTags(answers), 8);
+    const options = ragGuidedOptionsFromDocs(docs, nodeId, language, answers);
     return {
       nodeId,
-      options: [],
+      options,
       generatedAt: new Date().toISOString(),
-      provider: "ai-unavailable",
-      sources: [],
-      trace: ["AI option service unavailable; no static visa or residence options were generated"],
+      provider: options.length ? "api-rag-only" : "ai-unavailable",
+      sources: docs.map(docToSource),
+      trace: options.length
+        ? ["AI option service unavailable; generated explorable options from local RAG only"]
+        : ["AI option service unavailable; local RAG did not contain options for this node"],
     };
   }
 
@@ -592,6 +596,161 @@ function defaultNextForGuidedNode(nodeId: string): string {
   if (nodeId === "current-goal") return "current-documents";
   if (nodeId === "planning-documents" || nodeId === "current-documents") return "ai-result";
   return "";
+}
+
+function guidedOptionsQuery(nodeId: string, answers: Record<string, unknown>, path: GuidedFlowPathItem[]): string {
+  const trail = path.map((item) => item.answerLabel || valueToText(item.value)).filter(Boolean).join(" ");
+  const ageContext = ageContextForRetrieval(valueToText(answers.age));
+  const isMinorContext = ageContext.startsWith("minor");
+  const hints: Record<string, string> = {
+    "planning-visa": isMinorContext
+      ? "minor child school family reunification guardian protection residence Germany"
+      : "residence permit national visa studies vocational training skilled work family reunification asylum protection language course Germany",
+    "planning-readiness": "visa application readiness admission enrolment job offer training contract family documents proof livelihood health insurance",
+    "planning-documents": "visa residence documents passport biometric photo health insurance proof income enrolment birth certificate family documents",
+    "current-status": "residence status Aufenthaltstitel asylum protection work permission student family registration Germany",
+    "current-goal": "registration renewal residence permit work rights health insurance family benefits language integration appointment documents Germany",
+    "current-documents": "documents passport registration certificate residence document health insurance proof income rental contract appointment Germany",
+  };
+  return [
+    hints[nodeId] ?? "Germany migration residence documents next step",
+    `age ${valueToText(answers.age)}`,
+    ageContext,
+    `location ${valueToText(answers.locationIntent)}`,
+    `path ${trail}`,
+    `visa ${valueToText(answers.visaStatus)}`,
+  ].join(" ");
+}
+
+function ageContextForRetrieval(age: string): string {
+  const parsed = Number(age);
+  if (!Number.isFinite(parsed)) return "";
+  if (parsed < 16) return "minor child school family reunification guardian protection";
+  if (parsed < 18) return "minor youth school family training guardian";
+  return "adult";
+}
+
+function ragGuidedOptionsFromDocs(docs: Doc[], nodeId: string, language: "en" | "de", answers: Record<string, unknown>): GuidedFlowOption[] {
+  if (!docs.length) return [];
+  if (["planning-readiness", "planning-documents", "current-documents"].includes(nodeId)) {
+    const docsOptions = documentOptionsFromDocs(docs, nodeId, language);
+    if (docsOptions.length) return docsOptions;
+  }
+  return topicOptionsFromDocs(docs, nodeId, language, answers);
+}
+
+function topicOptionsFromDocs(docs: Doc[], nodeId: string, language: "en" | "de", answers: Record<string, unknown>): GuidedFlowOption[] {
+  const seen = new Set<string>();
+  const out: GuidedFlowOption[] = [];
+  for (const doc of docs.slice(0, 8)) {
+    if (!docSupportedByContext(doc, answers)) continue;
+    const title = doc.title.trim();
+    const key = title.toLowerCase();
+    if (!title || seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      value: cleanShort(doc.id || title),
+      label: title.slice(0, 120),
+      helper: firstSentence(doc.text) || (language === "de" ? "Aus lokalem RAG-Kontext abgerufen." : "Retrieved from local RAG context."),
+      icon: iconForDoc(doc),
+      badge: language === "de" ? "RAG-Quelle" : "RAG source",
+      next: defaultNextForGuidedNode(nodeId),
+      source: title,
+    });
+  }
+  return out;
+}
+
+function docSupportedByContext(doc: Doc, answers: Record<string, unknown>): boolean {
+  const age = Number(valueToText(answers.age));
+  if (!Number.isFinite(age) || age >= 16) return true;
+  const text = `${doc.title} ${doc.text}`.toLowerCase();
+  return !/\b(higher education|university|skilled work|blue card|opportunity card|qualified employment|vocational training)\b/.test(text);
+}
+
+const DOCUMENT_PATTERNS: Array<[string, string, string, RegExp]> = [
+  ["passport", "Valid passport", "Gueltiger Pass", /\b(passport|pass|ausweis)\b/i],
+  ["biometric_photo", "Biometric photo", "Biometrisches Foto", /\b(biometric photo|biometric photos|passport photo|passfoto|foto)\b/i],
+  ["health_insurance", "Health insurance proof", "Krankenversicherungsnachweis", /\b(health insurance|krankenversicherung|insurance)\b/i],
+  ["income_or_livelihood", "Proof of income or livelihood", "Nachweis ueber Einkommen oder Lebensunterhalt", /\b(proof of income|secure livelihood|livelihood|income|lebensunterhalt|einkommen)\b/i],
+  ["enrolment_or_admission", "Admission or enrolment proof", "Zulassung oder Immatrikulation", /\b(enrolment|enrollment|admission|university admission|study place|immatrikulation|zulassung)\b/i],
+  ["job_or_training_contract", "Job or training contract", "Arbeits- oder Ausbildungsvertrag", /\b(job offer|employment contract|training contract|work contract|arbeitsvertrag|ausbildungsvertrag)\b/i],
+  ["registration_certificate", "Registration certificate", "Meldebescheinigung", /\b(registration certificate|meldebescheinigung|anmeldung)\b/i],
+  ["landlord_confirmation", "Landlord confirmation", "Wohnungsgeberbestaetigung", /\b(landlord confirmation|wohnungsgeber|wohnungsgeberbestaetigung|wohnungsgeberbestätigung)\b/i],
+  ["rental_contract", "Rental contract", "Mietvertrag", /\b(rental contract|rent contract|mietvertrag)\b/i],
+  ["residence_document", "Residence document", "Aufenthaltsdokument", /\b(residence document|residence permit|aufenthaltstitel|aufenthaltsdokument)\b/i],
+  ["birth_certificate", "Birth certificate", "Geburtsurkunde", /\b(birth certificate|birth certificates|geburtsurkunde)\b/i],
+  ["tax_id", "Tax ID", "Steuer-ID", /\b(tax id|steuer.?id)\b/i],
+];
+
+function documentOptionsFromDocs(docs: Doc[], nodeId: string, language: "en" | "de"): GuidedFlowOption[] {
+  const text = docs.map((d) => `${d.title}. ${d.text}`).join("\n");
+  const out: GuidedFlowOption[] = [];
+  for (const [value, enLabel, deLabel, pattern] of DOCUMENT_PATTERNS) {
+    if (!pattern.test(text)) continue;
+    const source = matchingDocTitle(docs, pattern);
+    out.push({
+      value,
+      label: language === "de" ? deLabel : enLabel,
+      helper: source
+        ? (language === "de" ? `In RAG-Quelle genannt: ${source}.` : `Mentioned in RAG source: ${source}.`)
+        : (language === "de" ? "In RAG-Quellen genannt." : "Mentioned in RAG sources."),
+      icon: "FileText",
+      badge: language === "de" ? "Aus RAG" : "From RAG",
+      next: defaultNextForGuidedNode(nodeId),
+      source,
+    });
+  }
+  if (nodeId === "planning-readiness" && out.length) {
+    out.push({
+      value: "still_exploring",
+      label: language === "de" ? "Noch in Klaerung" : "Still exploring",
+      helper: language === "de"
+        ? "Nutze das, wenn du die in den Quellen genannten Nachweise noch nicht hast."
+        : "Use this when you do not yet have the source-mentioned proofs.",
+      icon: "Search",
+      badge: language === "de" ? "RAG-Quelle" : "RAG source",
+      next: defaultNextForGuidedNode(nodeId),
+      source: "RAG context",
+    });
+  }
+  return out.slice(0, 8);
+}
+
+function firstSentence(text: string): string {
+  const compact = String(text ?? "").replace(/\s+/g, " ").trim();
+  const match = compact.match(/^(.{40,220}?[.!?])\s/);
+  return (match?.[1] ?? compact.slice(0, 220)).trim();
+}
+
+function matchingDocTitle(docs: Doc[], pattern: RegExp): string {
+  for (const doc of docs) {
+    if (pattern.test(`${doc.title}. ${doc.text}`)) return doc.title;
+  }
+  return "";
+}
+
+function iconForDoc(doc: Doc): string {
+  const text = `${doc.title} ${doc.text.slice(0, 600)} ${doc.tags.join(" ")}`.toLowerCase();
+  if (/\b(work|labour|arbeit|job|employment)\b/.test(text)) return "BriefcaseBusiness";
+  if (/\b(study|student|university|studium|hochschule|language|integration)\b/.test(text)) return "GraduationCap";
+  if (/\b(family|kindergeld|child|children|familie|kind)\b/.test(text)) return "Users";
+  if (/\b(asylum|schutz|refugee|protection|asyl)\b/.test(text)) return "ShieldCheck";
+  if (/\b(document|passport|registration|anmeldung|permit|aufenthalt)\b/.test(text)) return "FileText";
+  return "Sparkles";
+}
+
+function docToSource(doc: Doc): Source {
+  return {
+    id: doc.id,
+    title: doc.title,
+    origin: doc.origin,
+    updatedAt: doc.updatedAt,
+    url: (doc as any).url || `/api/local-source/${encodeURIComponent(doc.id)}`,
+    relevance: doc.score,
+    accepted: true,
+    excerpt: doc.text.slice(0, 240),
+  };
 }
 
 function sanitizeClarifyingAnswers(input: unknown): Record<string, string> {

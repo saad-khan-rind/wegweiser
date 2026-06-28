@@ -43,15 +43,18 @@ def langchain_available() -> bool:
 # --------------------------------------------------------------------------- #
 # Source gathering
 # --------------------------------------------------------------------------- #
-def gather_sources(query: str, tags: list[str], k: int = 4, region: str = "", language: str = "en") -> list[dict]:
-    sources, _ = gather_sources_with_audit(query, tags, k, region, language)
+def gather_sources(query: str, tags: list[str], k: int = 4, region: str = "", language: str = "en",
+                   allow_web: bool | None = None, allow_llm_translation: bool = True) -> list[dict]:
+    sources, _ = gather_sources_with_audit(query, tags, k, region, language, allow_web, allow_llm_translation)
     return sources
 
 
 def gather_sources_with_audit(query: str, tags: list[str], k: int = 4, region: str = "",
-                              language: str = "en") -> tuple[list[dict], list[dict]]:
+                              language: str = "en", allow_web: bool | None = None,
+                              allow_llm_translation: bool = True) -> tuple[list[dict], list[dict]]:
     candidates: list[dict] = []
-    query_variants = _query_variants(query, language)
+    query_variants = _query_variants(query, language, allow_llm_translation)
+    web_enabled = USE_WEB if allow_web is None else allow_web
 
     # 1) admin-uploaded documents (vector store)
     for qv in query_variants:
@@ -83,7 +86,7 @@ def gather_sources_with_audit(query: str, tags: list[str], k: int = 4, region: s
                 })
 
     # 3) live web for the latest info; never writes to Pinecone.
-    if USE_WEB:
+    if web_enabled:
         for qv in query_variants:
             for r in web.direct_sources(qv["query"], qv["lang"], k=3):
                 candidates.append({
@@ -153,13 +156,13 @@ IN_SCOPE_TERMS = {
 }
 
 
-def _query_variants(query: str, language: str) -> list[dict]:
+def _query_variants(query: str, language: str, allow_llm_translation: bool = True) -> list[dict]:
     other = "de" if language == "en" else "en"
     variants = [
         {"query": query, "lang": language, "label": f"original-{language}"},
         {"query": _expanded_query(query), "lang": language, "label": f"expanded-{language}"},
     ]
-    translated = _translate_query(query, other) or _rule_translate_query(query, other)
+    translated = (_translate_query(query, other) if allow_llm_translation else "") or _rule_translate_query(query, other)
     if translated:
         variants.append({"query": translated, "lang": other, "label": f"translated-{other}"})
         variants.append({"query": _expanded_query(translated), "lang": other, "label": f"expanded-{other}"})
@@ -173,6 +176,9 @@ def _query_variants(query: str, language: str) -> list[dict]:
 
 
 def _translate_query(query: str, target_lang: str) -> str:
+    info = llm.available()
+    if not (info.get("reachable") and info.get("chat_model_present")):
+        return ""
     target = "German" if target_lang == "de" else "English"
     system = (
         "Translate the user's search question for retrieval. Preserve meaning, names, cities, and legal terms. "
@@ -445,11 +451,21 @@ def run_guided_options(node_id: str, answers: dict | None, path: list[dict] | No
     if Document is not None:
         trace.append("LangChain document context enabled")
     llm_info = llm.available()
-    sources, considered = gather_sources_with_audit(query, tags, k=4, region=region, language=language)
+    sources, considered = gather_sources_with_audit(
+        query,
+        tags,
+        k=5,
+        region=region,
+        language=language,
+        allow_web=False,
+        allow_llm_translation=False,
+    )
+    trace.append("Bubble options used RAG only; live web is reserved for the final answer")
     trace.append(f"Considered {len(considered)} resources; kept {len(sources)} relevant sources")
 
+    llm_ready = bool(llm_info.get("reachable") and llm_info.get("chat_model_present"))
     options: list[dict] = []
-    if llm_info.get("reachable") and sources:
+    if llm_ready and sources:
         data = llm.chat_json(
             _guided_options_system(language),
             _guided_options_user(clean_node, clean_answers, clean_path, sources, language),
@@ -458,9 +474,16 @@ def run_guided_options(node_id: str, answers: dict | None, path: list[dict] | No
         if isinstance(data, dict) and isinstance(data.get("options"), list):
             options = data["options"]
             trace.append("Generated options with the LLM from retrieved sources")
+    elif not llm_ready:
+        trace.append("Skipped LLM option generation because no chat model is available")
 
     if not options:
-        trace.append("No source-backed AI options generated; returning empty options")
+        rag_sources = sources or [s for s in considered if not _blocked_source(s)][:8]
+        options = _rag_guided_options(clean_node, rag_sources, language, clean_answers)
+        if options:
+            trace.append("Generated explorable options directly from RAG sources because the LLM was unavailable or returned no options")
+        else:
+            trace.append("No source-backed RAG options generated; returning empty options")
 
     safe_options = _sanitize_guided_options(options, language, clean_node)
     return _with_runtime({
@@ -505,8 +528,9 @@ def run(query: str, tags: list[str], region: str = "", language: str = "en",
     if not sources:
         return _with_runtime(_not_enough_info(answer_language, [], trace, confidence=0.2), resources, llm_info)
 
-    if not llm_info.get("reachable"):
-        return _with_runtime(_grounded_fallback(query, sources, "LLM unreachable", trace, answer_language), resources, llm_info)
+    llm_ready = bool(llm_info.get("reachable") and llm_info.get("chat_model_present"))
+    if not llm_ready:
+        return _with_runtime(_grounded_fallback(query, sources, "LLM unavailable or chat model missing", trace, answer_language), resources, llm_info)
 
     draft = _draft(goal, tags, sources, answer_language)
     if not draft or not (draft.get("summary") or draft.get("answer")):
@@ -718,17 +742,59 @@ def _guided_options_query(node_id: str, answers: dict, path: list[dict], languag
     location = _guided_value(answers.get("locationIntent", ""))
     visa = _guided_value(answers.get("visaStatus", ""))
     trail = " ".join(item.get("answerLabel", "") for item in path)
+    age_context = _age_context_for_retrieval(age)
+    is_minor_context = age_context.startswith("minor")
+    topic_hints = {
+        "planning-visa": (
+            "minor child school family reunification guardian protection residence Germany"
+            if is_minor_context
+            else "residence permit national visa studies vocational training skilled work family reunification "
+            "asylum protection language course Germany"
+        ),
+        "planning-readiness": (
+            "visa application readiness admission enrolment job offer training contract family documents "
+            "proof livelihood health insurance"
+        ),
+        "planning-documents": (
+            "visa residence documents passport biometric photo health insurance proof income enrolment "
+            "birth certificate family documents"
+        ),
+        "current-status": (
+            "residence status Aufenthaltstitel asylum protection work permission student family registration Germany"
+        ),
+        "current-goal": (
+            "registration renewal residence permit work rights health insurance family benefits language integration "
+            "appointment documents Germany"
+        ),
+        "current-documents": (
+            "documents passport registration certificate residence document health insurance proof income "
+            "rental contract appointment Germany"
+        ),
+    }
+    hint = topic_hints.get(node_id, "Germany migration residence documents next step")
     if language == "de":
         return (
-            f"Aktuelle offizielle Deutschland Visa Aufenthalt Optionen fuer Bubble {node_id}. "
-            f"Kontext: Alter {age}, Standort {location}, bisheriger Weg {trail}, Visum {visa}. "
-            "Nutze das Alter als Eignungskriterium und zeige nur quellenbasierte passende naechste Optionen."
+            f"{hint}. Bubble {node_id}. "
+            f"Kontext: Alter {age}, {age_context}, Standort {location}, bisheriger Weg {trail}, Visum {visa}. "
+            "Erzeuge naechste Optionen nur aus RAG-Quellen."
         )
     return (
-        f"Current official Germany visa residence options for guided bubble {node_id}. "
-        f"Context: age {age}, location {location}, path {trail}, visa {visa}. "
-        "Use the age as an eligibility constraint and show only source-backed suitable next options."
+        f"{hint}. Bubble {node_id}. "
+        f"Context: age {age}, {age_context}, location {location}, path {trail}, visa {visa}. "
+        "Generate next options only from RAG sources."
     )
+
+
+def _age_context_for_retrieval(age: str) -> str:
+    try:
+        parsed = int(float(str(age).strip()))
+    except Exception:
+        return ""
+    if parsed < 16:
+        return "minor child school family reunification guardian protection"
+    if parsed < 18:
+        return "minor youth school family training guardian"
+    return "adult"
 
 
 def _guided_options_system(language: str) -> str:
@@ -758,6 +824,143 @@ def _guided_options_user(node_id: str, answers: dict, path: list[dict], sources:
         f"Allowed next ids are planning-readiness, planning-documents, current-goal, current-documents, ai-result.\n\n"
         f"{context}\n\nSources:\n{source_block}"
     )
+
+
+def _rag_guided_options(node_id: str, sources: list[dict], language: str, answers: dict | None = None) -> list[dict]:
+    if not sources:
+        return []
+    if node_id in {"planning-documents", "current-documents", "planning-readiness"}:
+        doc_options = _document_options_from_sources(sources, node_id, language)
+        if doc_options:
+            return doc_options
+    return _topic_options_from_sources(sources, node_id, language, answers or {})
+
+
+def _topic_options_from_sources(sources: list[dict], node_id: str, language: str, answers: dict) -> list[dict]:
+    out: list[dict] = []
+    seen: set[str] = set()
+    for source in sources[:8]:
+        if not _source_supported_by_context(source, answers):
+            continue
+        title = re.sub(r"\s+", " ", str(source.get("title", ""))).strip()
+        text = re.sub(r"\s+", " ", str(source.get("text", ""))).strip()
+        if not title or title.lower() in seen:
+            continue
+        seen.add(title.lower())
+        out.append({
+            "value": _slug_value(source.get("id") or title),
+            "label": title,
+            "helper": _source_helper(text, language),
+            "icon": _icon_for_source(source),
+            "badge": "RAG source" if language == "en" else "RAG-Quelle",
+            "next": _default_guided_next(node_id),
+            "source": title,
+        })
+    return out[:8]
+
+
+def _source_supported_by_context(source: dict, answers: dict) -> bool:
+    try:
+        age = int(float(str(answers.get("age", "")).strip()))
+    except Exception:
+        return True
+    if age >= 16:
+        return True
+    text = _normalize(f"{source.get('title', '')} {source.get('text', '')}")
+    adult_route = re.search(
+        r"\b(higher education|university|skilled work|blue card|opportunity card|qualified employment|vocational training)\b",
+        text,
+    )
+    return not adult_route
+
+
+DOCUMENT_PATTERNS = [
+    ("passport", "Valid passport", "Gueltiger Pass", r"\b(passport|pass|ausweis)\b"),
+    ("biometric_photo", "Biometric photo", "Biometrisches Foto", r"\b(biometric photo|biometric photos|passport photo|passfoto|foto)\b"),
+    ("health_insurance", "Health insurance proof", "Krankenversicherungsnachweis", r"\b(health insurance|krankenversicherung|insurance)\b"),
+    ("income_or_livelihood", "Proof of income or livelihood", "Nachweis ueber Einkommen oder Lebensunterhalt", r"\b(proof of income|secure livelihood|livelihood|income|lebensunterhalt|einkommen)\b"),
+    ("enrolment_or_admission", "Admission or enrolment proof", "Zulassung oder Immatrikulation", r"\b(enrolment|enrollment|admission|university admission|study place|immatrikulation|zulassung)\b"),
+    ("job_or_training_contract", "Job or training contract", "Arbeits- oder Ausbildungsvertrag", r"\b(job offer|employment contract|training contract|work contract|arbeitsvertrag|ausbildungsvertrag)\b"),
+    ("registration_certificate", "Registration certificate", "Meldebescheinigung", r"\b(registration certificate|meldebescheinigung|anmeldung)\b"),
+    ("landlord_confirmation", "Landlord confirmation", "Wohnungsgeberbestaetigung", r"\b(landlord confirmation|wohnungsgeber|wohnungsgeberbestaetigung|wohnungsgeberbestätigung)\b"),
+    ("rental_contract", "Rental contract", "Mietvertrag", r"\b(rental contract|rent contract|mietvertrag)\b"),
+    ("residence_document", "Residence document", "Aufenthaltsdokument", r"\b(residence document|residence permit|aufenthaltstitel|aufenthaltsdokument)\b"),
+    ("birth_certificate", "Birth certificate", "Geburtsurkunde", r"\b(birth certificate|birth certificates|geburtsurkunde)\b"),
+    ("tax_id", "Tax ID", "Steuer-ID", r"\b(tax id|steuer.?id)\b"),
+]
+
+
+def _document_options_from_sources(sources: list[dict], node_id: str, language: str) -> list[dict]:
+    text = "\n".join(f"{s.get('title', '')}. {s.get('text', '')}" for s in sources[:8])
+    out: list[dict] = []
+    for value, en_label, de_label, pattern in DOCUMENT_PATTERNS:
+        if re.search(pattern, text, flags=re.I):
+            out.append({
+                "value": value,
+                "label": de_label if language == "de" else en_label,
+                "helper": _document_helper(sources, pattern, language),
+                "icon": "FileText",
+                "badge": "From RAG" if language == "en" else "Aus RAG",
+                "next": _default_guided_next(node_id),
+                "source": _matching_source_title(sources, pattern),
+            })
+    if node_id == "planning-readiness" and out:
+        out.append({
+            "value": "still_exploring",
+            "label": "Still exploring" if language == "en" else "Noch in Klaerung",
+            "helper": (
+                "Use this when you do not yet have the source-mentioned proofs."
+                if language == "en"
+                else "Nutze das, wenn du die in den Quellen genannten Nachweise noch nicht hast."
+            ),
+            "icon": "Search",
+            "badge": "RAG source" if language == "en" else "RAG-Quelle",
+            "next": _default_guided_next(node_id),
+            "source": "RAG context",
+        })
+    return out[:8]
+
+
+def _document_helper(sources: list[dict], pattern: str, language: str) -> str:
+    title = _matching_source_title(sources, pattern)
+    if language == "de":
+        return f"In den RAG-Quellen genannt: {title}." if title else "In den RAG-Quellen genannt."
+    return f"Mentioned in RAG source: {title}." if title else "Mentioned in the RAG sources."
+
+
+def _matching_source_title(sources: list[dict], pattern: str) -> str:
+    for source in sources:
+        text = f"{source.get('title', '')}. {source.get('text', '')}"
+        if re.search(pattern, text, flags=re.I):
+            return re.sub(r"\s+", " ", str(source.get("title", "RAG source"))).strip()[:120]
+    return ""
+
+
+def _source_helper(text: str, language: str) -> str:
+    sentence = _sentences(text[:900])
+    if sentence:
+        return sentence[0][:220]
+    return "Retrieved from local RAG context." if language == "en" else "Aus lokalem RAG-Kontext abgerufen."
+
+
+def _icon_for_source(source: dict) -> str:
+    text = _normalize(f"{source.get('title', '')} {source.get('text', '')[:600]} {' '.join(source.get('tags', []) if isinstance(source.get('tags'), list) else [])}")
+    if re.search(r"\b(work|labour|arbeit|job|employment)\b", text):
+        return "BriefcaseBusiness"
+    if re.search(r"\b(study|student|university|studium|hochschule|language|integration)\b", text):
+        return "GraduationCap"
+    if re.search(r"\b(family|kindergeld|child|children|familie|kind)\b", text):
+        return "Users"
+    if re.search(r"\b(asylum|schutz|refugee|protection|asyl)\b", text):
+        return "ShieldCheck"
+    if re.search(r"\b(document|passport|registration|anmeldung|permit|aufenthalt)\b", text):
+        return "FileText"
+    return "Sparkles"
+
+
+def _slug_value(value: object) -> str:
+    slug = re.sub(r"[^a-zA-Z0-9_-]+", "_", str(value).lower()).strip("_")[:60]
+    return slug or "rag_option"
 
 
 def _sanitize_guided_options(options: list[dict], language: str, node_id: str) -> list[dict]:

@@ -62,5 +62,45 @@
     "updatedAt": "2026-06-22",
     "tags": ["topic:asylum", "status:asylum"],
     "text": "People seeking protection first report as asylum seekers and then lodge a formal application at a branch of the Federal Office for Migration and Refugees (BAMF). You receive an arrival certificate (Ankunftsnachweis) and later an invitation to a personal interview, which is the most important step. You have the right to an interpreter, and independent counseling services can help you prepare your account."
+  },
+  {
+    "id": "studies",
+    "title": "Residence for studies",
+    "origin": "federal",
+    "updatedAt": "2026-06-15",
+    "tags": ["topic:residence", "topic:study", "status:student"],
+    "text": "People who want to study in Germany usually need admission or conditional admission from a recognised higher education institution, proof that their livelihood is secured, and health insurance. If they are abroad and need a stay longer than 90 days, they normally apply for a national visa before entering Germany and later receive a residence permit for studies from the Ausländerbehörde. Typical documents include a valid passport, biometric photos, admission or enrolment proof, proof of financing or secure livelihood, and health insurance proof."
+  },
+  {
+    "id": "skilled_work",
+    "title": "Skilled work and EU Blue Card routes",
+    "origin": "federal",
+    "updatedAt": "2026-06-18",
+    "tags": ["topic:work", "topic:residence", "status:worker"],
+    "text": "Residence routes for skilled work depend on the job, recognised qualifications, salary, and whether the employment is qualified. The EU Blue Card is one route for qualified employment when the legal requirements are met. Typical documents include a valid passport, biometric photo, employment contract or concrete job offer, proof of qualification or recognition, proof of health insurance, and sometimes salary evidence. The Ausländerbehörde or German mission checks the exact route and work permission."
+  },
+  {
+    "id": "vocational_training",
+    "title": "Vocational training residence route",
+    "origin": "federal",
+    "updatedAt": "2026-06-14",
+    "tags": ["topic:work", "topic:training", "topic:residence"],
+    "text": "People planning recognised vocational training in Germany may need a national visa or residence permit for training. The application normally depends on a training contract or training place, secure livelihood, health insurance, and identity documents. Typical documents include a valid passport, biometric photo, training contract, school or qualification documents, proof of livelihood or financing, and health insurance proof."
+  },
+  {
+    "id": "family_reunification",
+    "title": "Family reunification",
+    "origin": "bamf",
+    "updatedAt": "2026-06-12",
+    "tags": ["topic:family", "topic:residence"],
+    "text": "Family reunification allows close family members to join relatives in Germany when the legal requirements are met. The required proof depends on the family relationship and the status of the person in Germany. Typical documents include a valid passport, biometric photo, marriage certificate or birth certificate, proof of the family member's residence status in Germany, proof of housing or livelihood when required, and health insurance proof."
+  },
+  {
+    "id": "opportunity_card",
+    "title": "Opportunity Card for job search",
+    "origin": "federal",
+    "updatedAt": "2026-06-16",
+    "tags": ["topic:work", "topic:job_search", "topic:residence"],
+    "text": "The Opportunity Card can support a job search in Germany when the person meets the legal criteria. The route depends on qualification, points or recognised credentials, livelihood, and health insurance. Typical documents include a valid passport, biometric photo, qualification documents, proof of livelihood, health insurance proof, and evidence for the points or recognition criteria."
   }
 ]

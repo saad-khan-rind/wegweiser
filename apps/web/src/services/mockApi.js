@@ -9,6 +9,7 @@ import {
 import { unlockNodesFromProfile } from '../data/documentRules'
 import { TOTAL_AUSLANDER_STEPS } from '../data/auslanderInterview'
 import { detectIntent, buildSummaryCard, orderActionCards } from '../data/assistantMock'
+import { buildPreviewGuidedOptions } from '../data/guidedRag'
 import { requestAssistant, requestGuidedFlowAdvice, requestGuidedFlowOptions } from './apiClient'
 
 const STORAGE_KEY = 'migrant_assistant_guest'
@@ -306,21 +307,40 @@ export const apiService = {
       language: session.locale ?? DEFAULT_LOCALE,
     })
     const hasLiveOptions = Array.isArray(live?.options) && live.options.length > 0
-    const options = hasLiveOptions
-      ? getGuidedNodeOptions(node, helpFlow.answers ?? {}, live.options)
-      : []
+    const preview = hasLiveOptions
+      ? null
+      : buildPreviewGuidedOptions({
+          nodeId: node.id,
+          answers: helpFlow.answers ?? {},
+          path: helpFlow.bubblePath ?? [],
+          language: session.locale ?? DEFAULT_LOCALE,
+        })
+    const hasPreviewOptions = Array.isArray(preview?.options) && preview.options.length > 0
+    const options = getGuidedNodeOptions(
+      node,
+      helpFlow.answers ?? {},
+      hasLiveOptions ? live.options : hasPreviewOptions ? preview.options : [],
+    )
 
     const payload = {
       options,
       provider: hasLiveOptions
         ? (live?.provider ?? 'guided-ai')
-        : 'ai-unavailable',
-      generatedAt: live?.generatedAt ?? new Date().toISOString(),
-      sources: live?.sources ?? [],
+        : hasPreviewOptions
+          ? preview.provider
+          : 'ai-unavailable',
+      generatedAt: live?.generatedAt ?? preview?.generatedAt ?? new Date().toISOString(),
+      sources: hasLiveOptions ? (live?.sources ?? []) : (preview?.sources ?? []),
       trace: hasLiveOptions
         ? (live?.trace ?? [])
+        : hasPreviewOptions
+          ? [
+              ...(live?.trace ?? []),
+              ...(preview?.trace ?? []),
+            ]
         : [
             ...(live?.trace ?? []),
+            ...(preview?.trace ?? []),
             'AI/RAG did not return verified options; no local visa fallback was used.',
           ],
     }

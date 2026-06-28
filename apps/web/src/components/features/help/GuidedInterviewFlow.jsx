@@ -453,7 +453,21 @@ function AdviceBubble({ card, index, cardCount }) {
   )
 }
 
+function normalizeResultText(text) {
+  return String(text ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
+}
+
+function isDuplicateIntro(intro, cards = []) {
+  const introText = normalizeResultText(intro)
+  if (!introText) return false
+  const firstCard = cards[0]
+  const firstCardText = normalizeResultText(firstCard?.content?.body || firstCard?.description)
+  return firstCardText === introText || firstCardText.startsWith(`${introText} `)
+}
+
 function ResultBubble({ path, advice, loading, onGenerate, t }) {
+  const showIntro = advice?.intro && !isDuplicateIntro(advice.intro, advice.cards)
+
   return (
     <motion.section
       key="result"
@@ -515,7 +529,7 @@ function ResultBubble({ path, advice, loading, onGenerate, t }) {
 
       {advice ? (
         <div className="mt-6">
-          {advice.intro && (
+          {showIntro && (
             <p className="mb-4 text-sm font-semibold text-charcoal">{advice.intro}</p>
           )}
           <div className="grid items-stretch gap-4 lg:grid-cols-2">

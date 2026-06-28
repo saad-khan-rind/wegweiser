@@ -158,6 +158,37 @@ function sectionParagraph(section) {
     .trim()
 }
 
+function repeatedSentenceKey(sentence) {
+  const text = String(sentence ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
+  if (
+    text.startsWith('typical documents include') ||
+    text.startsWith('typische dokumente') ||
+    text.startsWith('typische unterlagen')
+  ) {
+    return 'typical-documents'
+  }
+  return text
+}
+
+function compactRepeatedSummary(text) {
+  const sentences = String(text ?? '').match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? []
+  const seen = new Set()
+  const kept = []
+
+  for (const sentence of sentences) {
+    const clean = sentence.replace(/\s+/g, ' ').trim()
+    if (!clean) continue
+
+    const key = repeatedSentenceKey(clean)
+    if (seen.has(key)) continue
+
+    seen.add(key)
+    kept.push(clean)
+  }
+
+  return kept.join(' ').trim()
+}
+
 function sectionList(section) {
   return section.lines.filter(isListItem).map(stripMarker).filter(Boolean)
 }
@@ -177,7 +208,7 @@ function buildCardsFromAnswer(data, code) {
   const cards = []
 
   const summarySection = sections.find((x) => x.key === 'summary')
-  const summaryBody = summarySection ? sectionParagraph(summarySection) : ''
+  const summaryBody = summarySection ? compactRepeatedSummary(sectionParagraph(summarySection)) : ''
   if (summaryBody) {
     cards.push({
       id: 'overview',

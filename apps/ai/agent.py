@@ -801,10 +801,13 @@ def _generic_extractive_answer(query: str, sources: list[dict], language: str) -
                 scored.append((score, sentence))
     scored.sort(key=lambda x: x[0], reverse=True)
     facts: list[str] = []
+    seen_signatures: set[str] = set()
     for _, sentence in scored:
         clean = sentence.strip(" .")
-        if clean and clean not in facts:
+        signature = _extractive_sentence_signature(clean)
+        if clean and clean not in facts and signature not in seen_signatures:
             facts.append(clean)
+            seen_signatures.add(signature)
         if len(facts) == 3:
             break
     if not facts:
@@ -817,6 +820,13 @@ def _generic_extractive_answer(query: str, sources: list[dict], language: str) -
         return ""
     head = "Zusammenfassung" if language == "de" else "Summary"
     return f"{head}\n" + ". ".join(facts) + "."
+
+
+def _extractive_sentence_signature(sentence: str) -> str:
+    text = _normalize(sentence).strip()
+    if text.startswith("typical documents include") or text.startswith("typische dokumente") or text.startswith("typische unterlagen"):
+        return "typical-documents"
+    return text
 
 
 def _registration_answer(query: str, sources: list[dict], language: str) -> str:

@@ -1,11 +1,16 @@
 import { getFlowForNode } from '../data/flows'
-import { unlockNodesFromProfile } from '../data/documentRules'
+import {
+  GUIDED_FLOW_RESULT_ID,
+  GUIDED_FLOW_START_ID,
+  buildGuidedTrailLabel,
+} from '../data/guidedFlow'
+import { resolveRequiredDocuments, unlockNodesFromProfile } from '../data/documentRules'
 import { TOTAL_AUSLANDER_STEPS } from '../data/auslanderInterview'
 import { detectIntent, buildSummaryCard, orderActionCards } from '../data/assistantMock'
-import { requestAssistant } from './apiClient'
+import { requestAssistant, requestGuidedFlowAdvice } from './apiClient'
 
 const STORAGE_KEY = 'migrant_assistant_guest'
-const STORAGE_VERSION = 5
+const STORAGE_VERSION = 6
 const DEFAULT_LOCALE = 'en'
 
 const delay = (ms = 200) =>
@@ -35,7 +40,10 @@ function defaultHelpFlow() {
   return {
     phase: 'choose',
     currentStep: 0,
+    activeBubbleId: GUIDED_FLOW_START_ID,
+    bubblePath: [],
     answers: {},
+    guidedAdvice: null,
     completed: false,
   }
 }
@@ -99,6 +107,11 @@ function migrateSession(session) {
   if (!session.helpFlow) {
     session.helpFlow = defaultHelpFlow()
   }
+  session.helpFlow.activeBubbleId ??= GUIDED_FLOW_START_ID
+  session.helpFlow.bubblePath ??= []
+  session.helpFlow.guidedAdvice ??= null
+  session.helpFlow.answers ??= {}
+  session.helpFlow.completed ??= false
   if (!session.nodes) {
     session.nodes = defaultNodes()
   }
@@ -136,6 +149,140 @@ function ensureInterview(node) {
     node.interview = { answers: {}, currentStep: 0, completed: false }
   }
   return node
+}
+
+function compactValue(value) {
+  if (Array.isArray(value)) return value.filter(Boolean).join(', ')
+  if (value === null || value === undefined) return ''
+  return String(value)
+}
+
+function buildLocalGuidedAdvice({ answers = {}, path = [], locale = DEFAULT_LOCALE }) {
+  const isGerman = locale === 'de'
+  const title = buildGuidedTrailLabel(path) || (isGerman ? 'Gefuehrter Weg' : 'Guided path')
+  const docs = resolveRequiredDocuments(answers)
+  const missing = docs.filter((doc) => !doc.hasDocument)
+  const ready = docs.filter((doc) => doc.hasDocument)
+  const isPlanning = answers.locationIntent === 'planning_move'
+  const ageLine = answers.age
+    ? isGerman
+      ? `Alter: ${answers.age}`
+      : `Age: ${answers.age}`
+    : ''
+
+  const intro = isGerman
+    ? 'Ich habe deine Bubble-Antworten zu einem ersten Plan zusammengefasst.'
+    : 'I turned your bubble answers into a first plan.'
+
+  const summaryBody = [
+    isPlanning
+      ? isGerman
+        ? 'Du planst den Umzug nach Deutschland.'
+        : 'You are planning to move to Germany.'
+      : isGerman
+        ? 'Du bist bereits in Deutschland.'
+        : 'You are already in Germany.',
+    ageLine,
+    title ? `${isGerman ? 'Pfad' : 'Path'}: ${title}.` : '',
+  ].filter(Boolean).join(' ')
+
+  const cards = [
+    {
+      id: 'guided-overview',
+      title: isGerman ? 'Deine Situation' : 'Your situation',
+      description: summaryBody,
+      icon: 'Sparkles',
+      status: 'recommended',
+      category: 'summary',
+      classification: 'advisable',
+      content: { body: summaryBody },
+    },
+    {
+      id: 'guided-next-steps',
+      title: isGerman ? 'Naechste Schritte' : 'Next steps',
+      description: isGerman
+        ? 'Starte mit der passenden Visum- oder Aufenthaltsspur und pruefe danach Termine und Unterlagen.'
+        : 'Start with the closest visa or residence path, then check appointments and documents.',
+      icon: 'ListChecks',
+      status: 'ready',
+      category: 'process',
+      classification: 'actionable',
+      content: {
+        steps: [
+          isPlanning
+            ? isGerman
+              ? 'Pruefe die passende Visumkategorie bei der deutschen Auslandsvertretung.'
+              : 'Check the matching visa category at the German mission responsible for you.'
+            : isGerman
+              ? 'Pruefe die passende Aufenthaltsspur bei deiner Auslaenderbehoerde.'
+              : 'Check the matching residence path with your local immigration office.',
+          isGerman
+            ? 'Sammle Nachweise, die zu deinem Zweck passen.'
+            : 'Collect proof documents that match your purpose.',
+          isGerman
+            ? 'Lass die AI-Antwort mit offiziellen Quellen bestaetigen, sobald der Dienst erreichbar ist.'
+            : 'Use the AI answer with official sources once the service is reachable.',
+        ],
+      },
+    },
+  ]
+
+  if (docs.length) {
+    cards.push({
+      id: 'guided-documents',
+      title: isGerman ? 'Dokumentenstand' : 'Document status',
+      description: missing.length
+        ? isGerman
+          ? `${missing.length} Unterlagen fehlen wahrscheinlich noch.`
+          : `${missing.length} document(s) are likely still missing.`
+        : isGerman
+          ? 'Die wichtigsten Unterlagen sind markiert.'
+          : 'Your key documents are marked as ready.',
+      icon: 'FileText',
+      status: missing.length ? 'recommended' : 'ready',
+      category: 'documents',
+      classification: 'actionable',
+      content: {
+        items: [
+          ...missing.map((doc) => ({ text: doc.id, status: 'warning' })),
+          ...ready.map((doc) => ({ text: doc.id, status: 'ready' })),
+        ],
+      },
+    })
+  }
+
+  const contextSummary = {
+    userPrompt: title,
+    intent: 'guided-flow',
+    answeredQuestions: path.map((item) => ({
+      questionId: item.answerKey ?? item.nodeId,
+      question: item.question,
+      answerValue: compactValue(item.value),
+      answerLabel: item.answerLabel,
+    })),
+    followUpPrompts: [],
+  }
+
+  return {
+    meta: {
+      requestId: crypto.randomUUID(),
+      generatedAt: new Date().toISOString(),
+      intent: 'guided-flow',
+      version: 'local',
+    },
+    status: 'completed',
+    intro,
+    contextSummary,
+    cards,
+    walletBundle: {
+      bundleId: crypto.randomUUID(),
+      title,
+      generatedAt: new Date().toISOString(),
+      contextSummary,
+      cards,
+    },
+    escalate: false,
+  }
 }
 
 export const apiService = {
@@ -181,11 +328,137 @@ export const apiService = {
     const session = readStorage()
     if (!session) throw new Error('No guest session')
     session.helpFlow = {
-      ...session.helpFlow,
       phase: 'interview',
       currentStep: 0,
-      answers: session.helpFlow?.answers ?? {},
+      activeBubbleId: GUIDED_FLOW_START_ID,
+      bubblePath: [],
+      answers: {},
+      guidedAdvice: null,
+      completed: false,
     }
+    writeStorage(session)
+    return session
+  },
+
+  saveGuidedBubbleAnswer: async ({
+    nodeId,
+    nextNodeId,
+    answerKey,
+    value,
+    answerLabel,
+    question,
+    patch = {},
+  }) => {
+    await delay()
+    const session = readStorage()
+    if (!session) throw new Error('No guest session')
+
+    const helpFlow = session.helpFlow ?? defaultHelpFlow()
+    const answers = {
+      ...(helpFlow.answers ?? {}),
+      ...patch,
+      [answerKey]: value,
+    }
+    const compactPath = (helpFlow.bubblePath ?? []).filter((item) => item.nodeId !== nodeId)
+    compactPath.push({
+      id: crypto.randomUUID(),
+      nodeId,
+      answerKey,
+      question,
+      value,
+      answerLabel,
+      answeredAt: new Date().toISOString(),
+    })
+
+    helpFlow.answers = answers
+    helpFlow.bubblePath = compactPath
+    helpFlow.activeBubbleId = nextNodeId ?? GUIDED_FLOW_RESULT_ID
+    helpFlow.currentStep = compactPath.length
+    helpFlow.guidedAdvice = null
+    helpFlow.completed = helpFlow.activeBubbleId === GUIDED_FLOW_RESULT_ID
+    helpFlow.phase = 'interview'
+
+    if (helpFlow.completed) {
+      session.nodes = unlockNodesFromProfile(answers)
+    }
+
+    session.helpFlow = helpFlow
+    writeStorage(session)
+    return session
+  },
+
+  goBackGuidedBubble: async () => {
+    await delay()
+    const session = readStorage()
+    if (!session) throw new Error('No guest session')
+
+    const helpFlow = session.helpFlow ?? defaultHelpFlow()
+    const path = [...(helpFlow.bubblePath ?? [])]
+    const last = path.pop()
+    if (!last) {
+      helpFlow.activeBubbleId = GUIDED_FLOW_START_ID
+      helpFlow.answers = {}
+    } else {
+      const answers = { ...(helpFlow.answers ?? {}) }
+      delete answers[last.answerKey]
+      if (last.answerKey === 'locationIntent') {
+        delete answers.journeyStage
+        delete answers.primaryGoal
+      }
+      helpFlow.answers = answers
+      helpFlow.activeBubbleId = last.nodeId
+      helpFlow.bubblePath = path
+    }
+
+    helpFlow.currentStep = helpFlow.bubblePath?.length ?? 0
+    helpFlow.guidedAdvice = null
+    helpFlow.completed = false
+    helpFlow.phase = 'interview'
+    session.helpFlow = helpFlow
+    writeStorage(session)
+    return session
+  },
+
+  resetGuidedBubbleFlow: async () => {
+    await delay()
+    const session = readStorage()
+    if (!session) throw new Error('No guest session')
+    session.helpFlow = {
+      ...defaultHelpFlow(),
+      phase: 'interview',
+    }
+    session.nodes = defaultNodes()
+    session.activeNodeId = null
+    writeStorage(session)
+    return session
+  },
+
+  generateGuidedFlowAdvice: async () => {
+    await delay(350)
+    const session = readStorage()
+    if (!session) throw new Error('No guest session')
+    const helpFlow = session.helpFlow ?? defaultHelpFlow()
+    const answers = helpFlow.answers ?? {}
+    const path = helpFlow.bubblePath ?? []
+
+    const response =
+      (await requestGuidedFlowAdvice({
+        answers,
+        path,
+        language: session.locale ?? DEFAULT_LOCALE,
+      })) ??
+      buildLocalGuidedAdvice({
+        answers,
+        path,
+        locale: session.locale ?? DEFAULT_LOCALE,
+      })
+
+    helpFlow.guidedAdvice = response
+    helpFlow.completed = true
+    helpFlow.activeBubbleId = GUIDED_FLOW_RESULT_ID
+    helpFlow.phase = 'interview'
+    session.helpFlow = helpFlow
+    session.nodes = unlockNodesFromProfile(answers)
     writeStorage(session)
     return session
   },
@@ -755,6 +1028,7 @@ export const apiService = {
 
     return {
       helpAnswers: migrated.helpFlow?.answers ?? {},
+      helpBubblePath: migrated.helpFlow?.bubblePath ?? [],
       helpCompleted: Boolean(migrated.helpFlow?.completed),
       topics,
       wallet: migrated.assistant?.wallet ?? [],
@@ -767,7 +1041,9 @@ export const apiService = {
   clearProfileAnswers: async () => {
     const session = readStorage()
     if (!session) throw new Error('No guest session')
-    session.helpFlow = { ...(session.helpFlow ?? {}), answers: {} }
+    session.helpFlow = defaultHelpFlow()
+    session.nodes = defaultNodes()
+    session.activeNodeId = null
     writeStorage(session)
     return session
   },

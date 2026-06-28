@@ -470,6 +470,83 @@ export async function requestAssistant({
   }
 }
 
+export async function requestGuidedFlowAdvice({
+  answers = {},
+  path = [],
+  language = 'en',
+  region = '',
+}) {
+  const code = lang(language)
+  const s = STRINGS[code]
+  const meta = {
+    requestId: uuid(),
+    generatedAt: new Date().toISOString(),
+    intent: 'guided-flow',
+    version: '1.0',
+  }
+  const base = apiBase()
+  if (!base) return null
+
+  let data = null
+  try {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs())
+    const res = await fetch(`${base}/api/guided-flow/recommendation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        answers,
+        path,
+        region,
+        language: code,
+      }),
+      signal: ctrl.signal,
+    })
+    clearTimeout(timer)
+    if (res.ok) data = await res.json()
+  } catch {
+    data = null
+  }
+
+  if (!data) return null
+
+  const answeredQuestions = (Array.isArray(data.contextPath) ? data.contextPath : path)
+    .map((item) => ({
+      questionId: String(item.answerKey ?? item.nodeId ?? ''),
+      question: String(item.question ?? ''),
+      answerValue: Array.isArray(item.value) ? item.value.join(', ') : String(item.value ?? ''),
+      answerLabel: String(item.answerLabel ?? item.label ?? item.value ?? ''),
+    }))
+    .filter((item) => item.questionId || item.question || item.answerLabel)
+
+  const contextSummary = {
+    userPrompt: data.prompt || answeredQuestions.map((item) => item.answerLabel).join(' -> '),
+    intent: 'guided-flow',
+    answeredQuestions,
+    followUpPrompts: [],
+  }
+
+  const cards = buildCardsFromAnswer(data, code)
+  return {
+    meta,
+    status: 'completed',
+    intro: s.introCompleted,
+    contextSummary,
+    guidedQuestions: null,
+    cards,
+    walletBundle: {
+      bundleId: uuid(),
+      title: contextSummary.userPrompt?.slice(0, 100) || 'Guided flow',
+      generatedAt: meta.generatedAt,
+      contextSummary,
+      cards,
+    },
+    escalate: Boolean(data.escalate),
+    confidence: typeof data.confidence === 'number' ? data.confidence : undefined,
+    sources: data.sources ?? [],
+  }
+}
+
 // =========================================================================
 // Admin + auth API
 // =========================================================================

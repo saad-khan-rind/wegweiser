@@ -12,10 +12,22 @@ import { apiService } from './mockApi'
 //   - "read back" via `apiService.fetchUserProgress()` which reads, migrates,
 //     re-persists, and returns the session.
 const STORAGE_KEY = 'migrant_assistant_guest'
-const CURRENT_VERSION = 5
+const CURRENT_VERSION = 6
 
 const INTENTS = ['residence', 'anmeldung', 'work', 'general']
 const NODE_IDS = ['arrival', 'residence-permit', 'legal-rights', 'work-career']
+const BUBBLE_NODE_IDS = [
+  'entry',
+  'current-duration',
+  'current-status',
+  'current-goal',
+  'current-documents',
+  'planning-age',
+  'planning-visa',
+  'planning-readiness',
+  'planning-documents',
+  'ai-result',
+]
 
 // JSON-safe building blocks. fast-check values are restricted to types that
 // survive a JSON.stringify/JSON.parse round-trip (the actual persistence
@@ -58,7 +70,36 @@ const walletItemArb = fc.record({
   title: fc.string(),
 })
 
+const bubblePathItemArb = fc.record({
+  id: fc.uuid(),
+  nodeId: fc.constantFrom(...BUBBLE_NODE_IDS),
+  answerKey: fc.string({ minLength: 1, maxLength: 18 }),
+  question: fc.string({ maxLength: 80 }),
+  value: fc.oneof(jsonScalar, fc.array(fc.string({ maxLength: 12 }), { maxLength: 4 })),
+  answerLabel: fc.string({ maxLength: 120 }),
+  answeredAt: isoDate,
+})
+
+const guidedAdviceArb = fc.oneof(
+  fc.constant(null),
+  fc.record({
+    status: fc.constantFrom('completed', 'needs_more_info'),
+    intro: fc.string({ maxLength: 120 }),
+    cards: fc.array(cardArb, { maxLength: 3 }),
+  }),
+)
+
 const helpFlowArb = fc.record({
+  phase: fc.constantFrom('choose', 'interview', 'results', 'complete'),
+  currentStep: fc.nat({ max: 10 }),
+  activeBubbleId: fc.constantFrom(...BUBBLE_NODE_IDS),
+  bubblePath: fc.array(bubblePathItemArb, { maxLength: 5 }),
+  answers: answersArb,
+  guidedAdvice: guidedAdviceArb,
+  completed: fc.boolean(),
+})
+
+const priorHelpFlowArb = fc.record({
   phase: fc.constantFrom('choose', 'interview', 'results', 'complete'),
   currentStep: fc.nat({ max: 10 }),
   answers: answersArb,
@@ -73,7 +114,7 @@ const nodesArb = fc.record({
   'work-career': nodeArb,
 })
 
-// A fully-formed CURRENT (v5) assistant session: already carries `intent` and
+// A fully-formed CURRENT (v6) assistant session: already carries `intent` and
 // `cardCompletion`, so migration is a no-op and the round-trip is exact.
 const assistantSessionV5Arb = fc.record({
   id: fc.uuid(),
@@ -146,14 +187,14 @@ const assistantSessionPriorArb = fc.record(
 
 // Well-formed older session: has all the core structure (helpFlow, nodes,
 // assistant with sessions/wallet arrays) so the ONLY migration changes are the
-// v5 back-fills and the schemaVersion bump.
+// v5/v6 back-fills and the schemaVersion bump.
 const priorSessionArb = fc.record({
   schemaVersion: fc.constantFrom(3, 4),
   sessionId: fc.uuid(),
   mode: fc.constant('guest'),
   locale: fc.constantFrom('de', 'en'),
   activeNodeId: fc.oneof(fc.constant(null), fc.constantFrom(...NODE_IDS)),
-  helpFlow: helpFlowArb,
+  helpFlow: priorHelpFlowArb,
   assistant: fc.record({
     activeSessionId: fc.oneof(fc.constant(null), fc.uuid()),
     sessions: fc.array(assistantSessionPriorArb, { maxLength: 3 }),
@@ -163,11 +204,16 @@ const priorSessionArb = fc.record({
   createdAt: isoDate,
 })
 
-// Mirror of the production v5 migration applied to a JSON-clone of the original,
-// so we can assert the migrated result equals "the original with only the v5
+// Mirror of the production migration applied to a JSON-clone of the original,
+// so we can assert the migrated result equals "the original with only the known
 // back-fills applied" — i.e. nothing else was lost or altered.
 function expectedMigration(original) {
   const expected = JSON.parse(JSON.stringify(original))
+  expected.helpFlow.activeBubbleId ??= 'entry'
+  expected.helpFlow.bubblePath ??= []
+  expected.helpFlow.guidedAdvice ??= null
+  expected.helpFlow.answers ??= {}
+  expected.helpFlow.completed ??= false
   for (const session of expected.assistant.sessions) {
     if (!session || typeof session !== 'object') continue
     session.intent = session.intent ?? null
@@ -219,7 +265,7 @@ describe('Property 18: Session persistence round-trip and migration preservation
 
         const migrated = await apiService.fetchUserProgress()
 
-        // Whole-session check: equals the original with ONLY the v5 back-fills
+        // Whole-session check: equals the original with ONLY the known back-fills
         // applied — proving every other field (sessionId, locale, createdAt,
         // nodes, helpFlow, wallet, cardGroups, guidedAnswers) is preserved.
         expect(migrated).toEqual(expectedMigration(session))
@@ -232,7 +278,7 @@ describe('Property 18: Session persistence round-trip and migration preservation
         expect(migrated.locale).toBe(session.locale)
         expect(migrated.createdAt).toBe(session.createdAt)
         expect(migrated.nodes).toEqual(session.nodes)
-        expect(migrated.helpFlow).toEqual(session.helpFlow)
+        expect(migrated.helpFlow).toEqual(expectedMigration(session).helpFlow)
         expect(migrated.assistant.wallet).toEqual(session.assistant.wallet)
 
         // Per-assistant-session: existing data preserved, new fields back-filled.

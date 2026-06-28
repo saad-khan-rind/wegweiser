@@ -159,10 +159,10 @@
       "tip": "Unsicher? Stellen Sie einfach eine Frage"
     },
     "guided": {
-      "title": "Geführtes Interview",
-      "description": "Ein paar Fragen zu Visum und Dokumenten — Schritt für Schritt.",
-      "cta": "Geführtes Interview starten",
-      "flowTitle": "Geführtes Interview",
+      "title": "Bubble-Guide",
+      "description": "Beantworte eine Bubble nach der anderen und sieh, wie dein Deutschland-Weg entsteht.",
+      "cta": "Bubble-Guide starten",
+      "flowTitle": "Bubble-Guide",
       "finish": "Meine Dokumente anzeigen"
     },
     "browse": {
@@ -551,6 +551,102 @@
     "step6": {
       "title": "Checkliste wird erstellt",
       "description": "Wir gleichen Ihre Antworten mit typischen Ausländeramt-Anforderungen ab."
+    },
+    "bubble": {
+      "flowSubtitle": "Tippe eine Bubble an. Der naechste Knoten entsteht aus deiner Antwort.",
+      "reset": "Zuruecksetzen",
+      "liveNode": "Neue Bubble",
+      "continue": "Weiter",
+      "clearSelection": "Auswahl leeren",
+      "recommended": "Gute Wahl",
+      "ageValue": "Alter {{age}}",
+      "entry": {
+        "question": "Bist du in Deutschland oder planst du gerade den Umzug nach Deutschland?",
+        "subtitle": "Diese erste Auswahl bestimmt den weiteren Weg.",
+        "current": "Ich bin bereits in Deutschland",
+        "currentHint": "Fuer Anmeldung, aktuellen Aufenthaltstitel, Verlaengerung oder Arbeitsrechte.",
+        "planning": "Ich plane den Umzug nach Deutschland",
+        "planningHint": "Fuer den Vergleich von Visa, bevor du ankommst."
+      },
+      "currentDuration": {
+        "question": "Wie lange bist du schon in Deutschland?",
+        "subtitle": "So unterscheiden wir erste Schritte von Verlaengerung oder Statuswechsel.",
+        "justArrivedHint": "Gut fuer Anmeldung, erste Versicherung und erste Aufenthaltsschritte.",
+        "fewMonthsHint": "Gut fuer Folgetermine, fehlende Unterlagen oder erste Verlaengerungen.",
+        "settledHint": "Gut fuer Verlaengerung, Statuswechsel, Rechte und langfristige Planung."
+      },
+      "currentStatus": {
+        "question": "Was ist dein aktueller Visum- oder Aufenthaltsstatus?",
+        "subtitle": "Waehle die naechste passende Option. Unsicher ist okay."
+      },
+      "currentGoal": {
+        "question": "Was moechtest du als Naechstes klaeren?",
+        "subtitle": "Dein Ziel entscheidet, welche Checkliste und Aktionskarten wichtig sind.",
+        "workRights": "Klaeren, ob ich arbeiten darf"
+      },
+      "planningAge": {
+        "question": "Wie alt wirst du sein, wenn du den Antrag stellst?",
+        "subtitle": "Alter kann beeinflussen, welche Wege realistischer sind, besonders Studium, Ausbildung und Chancenkarte.",
+        "placeholder": "25"
+      },
+      "planningVisa": {
+        "question": "Welche Visumspur sollen wir erkunden?",
+        "subtitle": "Alle gaengigen Wege werden gezeigt. Gute Treffer sind anhand deines Alters markiert."
+      },
+      "visas": {
+        "student": "Studentenvisum",
+        "studentHint": "Fuer Studium oder studienvorbereitende Programme.",
+        "vocational": "Visum zur Ausbildung",
+        "vocationalHint": "Fuer Ausbildung, Lehre und Ausbildungsvertrag.",
+        "skilledWork": "Fachkraeftevisum",
+        "skilledWorkHint": "Fuer anerkannte Qualifikation und qualifiziertes Jobangebot.",
+        "blueCard": "Blaue Karte EU",
+        "blueCardHint": "Fuer qualifizierte Beschaeftigung mit Gehalts- und Abschlussanforderungen.",
+        "opportunity": "Chancenkarte",
+        "opportunityHint": "Fuer Jobsuche, wenn Punkte oder Qualifikation passen.",
+        "language": "Sprachkursvisum",
+        "languageHint": "Fuer intensive Deutschkurse vor einem weiteren Weg.",
+        "family": "Familiennachzug",
+        "familyHint": "Fuer Ehepartner, Eltern, Kinder oder nahe Familie in Deutschland.",
+        "selfEmployment": "Selbststaendigkeit",
+        "selfEmploymentHint": "Fuer Gruendung, Freiberuflichkeit oder eigene Geschaeftstaetigkeit.",
+        "protection": "Asyl oder Schutz",
+        "protectionHint": "Fuer Schutzbedarf. Eine Beratung kann bei diesem sensiblen Weg helfen."
+      },
+      "readiness": {
+        "question": "Was hast du fuer diesen Plan schon?",
+        "subtitle": "So erkennt die AI, ob du jetzt beantragen oder erst vorbereiten solltest.",
+        "universityAdmission": "Hochschulzulassung",
+        "universityAdmissionHint": "Du hast eine Zulassung oder bedingte Zulassung.",
+        "jobOffer": "Jobangebot",
+        "jobOfferHint": "Du hast einen Arbeitgeber oder einen konkreten Vertragsweg.",
+        "trainingContract": "Ausbildungsvertrag",
+        "trainingContractHint": "Du hast ein Angebot fuer Ausbildung oder Lehre.",
+        "familyInvitation": "Familie in Deutschland",
+        "familyInvitationHint": "Du moechtest zu einem Familienmitglied in Deutschland ziehen.",
+        "exploring": "Noch am Vergleichen",
+        "exploringHint": "Du moechtest erst Wege vergleichen, bevor du dich entscheidest."
+      },
+      "documents": {
+        "question": "Welche Dokumente hast du schon?",
+        "subtitle": "Waehle alles aus, was passt. Leer ist okay, wenn du gerade startest.",
+        "planningQuestion": "Welche Dokumente hast du schon fuer deinen geplanten Umzug?",
+        "planningSubtitle": "Das wird Teil des finalen AI-Kontexts.",
+        "none": "Noch keine Dokumente ausgewaehlt",
+        "universityAdmission": "Hochschulzulassung",
+        "qualificationProof": "Abschluss- oder Qualifikationsnachweis",
+        "languageCertificate": "Sprachzertifikat",
+        "financialProof": "Finanzierungsnachweis"
+      },
+      "ai": {
+        "badge": "Finale Bubble",
+        "question": "Bereit, dass die AI deine naechsten Schritte plant?",
+        "subtitle": "Die AI erhaelt deinen vollstaendigen Bubble-Pfad als Kontext und antwortet mit offiziellen Quellen, wenn das Backend erreichbar ist.",
+        "generate": "Guide erstellen",
+        "generating": "Wird erstellt",
+        "regenerate": "Neu erstellen",
+        "empty": "Dein Pfad ist bereit. Erstelle den Guide, um daraus einen passenden Plan zu machen."
+      }
     },
     "documents": {
       "passport": "Gültiger Reisepass",

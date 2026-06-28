@@ -7,21 +7,32 @@ import {
   useState,
 } from 'react'
 import { AUSLANDER_STEPS } from '../data/auslanderInterview'
+import {
+  GUIDED_FLOW_START_ID,
+  getGuidedNode,
+} from '../data/guidedFlow'
 import { resolveRequiredDocuments } from '../data/documentRules'
 import { apiService } from '../services/mockApi'
 
 const GuidedInterviewContext = createContext(null)
+const EMPTY_HELP_FLOW = {}
+const EMPTY_ANSWERS = {}
+const EMPTY_BUBBLE_PATH = []
 
 export function GuidedInterviewProvider({ children }) {
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [documentResults, setDocumentResults] = useState(null)
 
-  const helpFlow = session?.helpFlow ?? {}
+  const helpFlow = session?.helpFlow ?? EMPTY_HELP_FLOW
   const phase = helpFlow.phase ?? 'choose'
   const currentStep = helpFlow.currentStep ?? 0
-  const answers = helpFlow.answers ?? {}
+  const answers = helpFlow.answers ?? EMPTY_ANSWERS
   const stepData = AUSLANDER_STEPS[currentStep] ?? null
+  const activeBubbleId = helpFlow.activeBubbleId ?? GUIDED_FLOW_START_ID
+  const activeBubble = getGuidedNode(activeBubbleId)
+  const bubblePath = helpFlow.bubblePath ?? EMPTY_BUBBLE_PATH
+  const guidedAdvice = helpFlow.guidedAdvice ?? null
 
   const refresh = useCallback(async () => {
     const data = await apiService.fetchUserProgress()
@@ -64,6 +75,47 @@ export function GuidedInterviewProvider({ children }) {
     },
     [currentStep],
   )
+
+  const saveBubbleAnswer = useCallback(async (payload) => {
+    setLoading(true)
+    try {
+      const updated = await apiService.saveGuidedBubbleAnswer(payload)
+      setSession(updated)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const goBackBubble = useCallback(async () => {
+    setLoading(true)
+    try {
+      const updated = await apiService.goBackGuidedBubble()
+      setSession(updated)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const resetBubbleFlow = useCallback(async () => {
+    setLoading(true)
+    try {
+      const updated = await apiService.resetGuidedBubbleFlow()
+      setSession(updated)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const generateGuidedAdvice = useCallback(async () => {
+    setLoading(true)
+    try {
+      const updated = await apiService.generateGuidedFlowAdvice()
+      setSession(updated)
+      setDocumentResults(resolveRequiredDocuments(updated.helpFlow?.answers))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   const goBackStep = useCallback(async () => {
     if (currentStep <= 0) {
@@ -129,10 +181,18 @@ export function GuidedInterviewProvider({ children }) {
       currentStep,
       answers,
       stepData,
+      activeBubbleId,
+      activeBubble,
+      bubblePath,
+      guidedAdvice,
       totalSteps: AUSLANDER_STEPS.length,
       documentResults,
       startInterview,
       saveStepAndAdvance,
+      saveBubbleAnswer,
+      goBackBubble,
+      resetBubbleFlow,
+      generateGuidedAdvice,
       goBackStep,
       completeInterview,
       goToChooseMode,
@@ -147,9 +207,17 @@ export function GuidedInterviewProvider({ children }) {
       currentStep,
       answers,
       stepData,
+      activeBubbleId,
+      activeBubble,
+      bubblePath,
+      guidedAdvice,
       documentResults,
       startInterview,
       saveStepAndAdvance,
+      saveBubbleAnswer,
+      goBackBubble,
+      resetBubbleFlow,
+      generateGuidedAdvice,
       goBackStep,
       completeInterview,
       goToChooseMode,

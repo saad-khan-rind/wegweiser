@@ -7,7 +7,14 @@ import { apiService } from '../../../services/mockApi'
 
 // Resolve the stored guided-interview answers into human-readable
 // { question, value } rows using the question catalog + locale.
-function resolveProfileRows(helpAnswers, t) {
+function resolveProfileRows(helpAnswers, t, bubblePath = []) {
+  if (bubblePath.length > 0) {
+    return bubblePath.map((item) => ({
+      question: item.question,
+      value: item.answerLabel,
+    }))
+  }
+
   const rows = []
   for (const step of AUSLANDER_STEPS) {
     const key = step.answerKey
@@ -94,7 +101,9 @@ export function MyInfoPanel({ open, onClose, onChanged }) {
     await afterMutation()
   }
 
-  const profileRows = data ? resolveProfileRows(data.helpAnswers, t) : []
+  const profileRows = data
+    ? resolveProfileRows(data.helpAnswers, t, data.helpBubblePath ?? [])
+    : []
 
   return createPortal(
     <div className="fixed inset-0 z-[60] flex justify-end" role="dialog" aria-modal="true" aria-label={t('myInfo.title')}>

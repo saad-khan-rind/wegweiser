@@ -159,10 +159,10 @@
       "tip": "Not sure? Try asking a question"
     },
     "guided": {
-      "title": "Guided Interview",
-      "description": "A few questions about your visa and documents — step by step.",
-      "cta": "Start Guided Interview",
-      "flowTitle": "Guided Interview",
+      "title": "Bubble Guide",
+      "description": "Answer one bubble at a time and watch your Germany path build itself.",
+      "cta": "Start Bubble Guide",
+      "flowTitle": "Bubble Guide",
       "finish": "See my documents"
     },
     "browse": {
@@ -551,6 +551,102 @@
     "step6": {
       "title": "Ready to build your checklist",
       "description": "We'll match your answers against typical Ausländeramt requirements and show what to bring."
+    },
+    "bubble": {
+      "flowSubtitle": "Tap a bubble. The next node appears from your answer.",
+      "reset": "Reset",
+      "liveNode": "New bubble",
+      "continue": "Continue",
+      "clearSelection": "Clear selection",
+      "recommended": "Good match",
+      "ageValue": "Age {{age}}",
+      "entry": {
+        "question": "Are you in Germany or currently planning to move to Germany?",
+        "subtitle": "This first choice shapes the rest of your path.",
+        "current": "I am already in Germany",
+        "currentHint": "Use this if you need help with Anmeldung, a current permit, renewal, or work rights.",
+        "planning": "I am planning to move to Germany",
+        "planningHint": "Use this if you are comparing visas before you arrive."
+      },
+      "currentDuration": {
+        "question": "How long have you been in Germany?",
+        "subtitle": "This helps separate first-arrival tasks from renewal or status-change tasks.",
+        "justArrivedHint": "Good for Anmeldung, first insurance, and first permit steps.",
+        "fewMonthsHint": "Good for follow-up appointments, missing documents, or first renewals.",
+        "settledHint": "Good for renewals, status changes, rights, and long-term planning."
+      },
+      "currentStatus": {
+        "question": "What is your current visa or residence status?",
+        "subtitle": "Pick the closest match. You can choose not sure if it is unclear."
+      },
+      "currentGoal": {
+        "question": "What do you want to solve next?",
+        "subtitle": "Your goal decides which document checklist and action cards matter most.",
+        "workRights": "Understand if I can work"
+      },
+      "planningAge": {
+        "question": "How old will you be when you apply?",
+        "subtitle": "Age can change which routes are more realistic, especially study, training, and opportunity-card paths.",
+        "placeholder": "25"
+      },
+      "planningVisa": {
+        "question": "Which visa path should we explore?",
+        "subtitle": "All common routes are shown. Good matches are highlighted from your age."
+      },
+      "visas": {
+        "student": "Student visa",
+        "studentHint": "For university study or preparatory study programs.",
+        "vocational": "Vocational training visa",
+        "vocationalHint": "For Ausbildung, apprenticeships, and training contracts.",
+        "skilledWork": "Skilled worker visa",
+        "skilledWorkHint": "For recognized qualifications and a qualified job offer.",
+        "blueCard": "EU Blue Card",
+        "blueCardHint": "For qualified employment with salary and degree requirements.",
+        "opportunity": "Opportunity Card",
+        "opportunityHint": "For job search when you meet points or qualification criteria.",
+        "language": "Language course visa",
+        "languageHint": "For intensive German courses before another route.",
+        "family": "Family reunification",
+        "familyHint": "For joining a spouse, parent, child, or close family member.",
+        "selfEmployment": "Self-employment visa",
+        "selfEmploymentHint": "For founders, freelancers, and business activity.",
+        "protection": "Asylum or protection",
+        "protectionHint": "For protection needs. A counselor can help with this sensitive route."
+      },
+      "readiness": {
+        "question": "What do you already have for that plan?",
+        "subtitle": "This tells the AI whether to recommend applying now or preparing first.",
+        "universityAdmission": "University admission",
+        "universityAdmissionHint": "You already have admission or a conditional admission.",
+        "jobOffer": "Job offer",
+        "jobOfferHint": "You have an employer or a concrete contract path.",
+        "trainingContract": "Training contract",
+        "trainingContractHint": "You have an Ausbildung or apprenticeship offer.",
+        "familyInvitation": "Family in Germany",
+        "familyInvitationHint": "You plan to join a family member in Germany.",
+        "exploring": "Still exploring",
+        "exploringHint": "You need to compare routes before choosing one."
+      },
+      "documents": {
+        "question": "Which documents do you already have?",
+        "subtitle": "Select all that apply. Empty is okay if you are just starting.",
+        "planningQuestion": "Which documents do you already have for your planned move?",
+        "planningSubtitle": "This becomes part of the final AI context.",
+        "none": "No documents selected yet",
+        "universityAdmission": "University admission letter",
+        "qualificationProof": "Degree or qualification proof",
+        "languageCertificate": "Language certificate",
+        "financialProof": "Proof of funds"
+      },
+      "ai": {
+        "badge": "Final bubble",
+        "question": "Ready for AI to map your next steps?",
+        "subtitle": "The AI receives your complete bubble trail as context and answers with official-source guidance when the backend is available.",
+        "generate": "Generate guide",
+        "generating": "Generating",
+        "regenerate": "Regenerate",
+        "empty": "Your trail is ready. Generate the guide to turn these answers into a tailored plan."
+      }
     },
     "documents": {
       "passport": "Valid passport",

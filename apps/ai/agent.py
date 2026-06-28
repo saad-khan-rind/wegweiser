@@ -1,11 +1,13 @@
 """The agent: goal-based, self-verifying RAG.
 
 Loop (bounded):
-  1. Contextualize — rewrite follow-up queries using conversation history.
-  2. Gather sources  — vector store (admin uploads) + crawled corpus + live web.
-  3. Draft           — answer the goal using ONLY those sources, with citations.
-  4. Verify          — the model critiques its own draft against the sources.
-  5. Act             — finalize, or refine the query and gather more context.
+  1. Gather sources  — vector store (admin uploads) + crawled corpus + live web.
+  2. Draft           — answer the goal using ONLY those sources, with citations.
+  3. Verify          — the model critiques its own draft against the sources:
+                       are all claims supported? is anything hallucinated? is a
+                       user-specific fact missing that we must ASK for, not assume?
+  4. Act             — finalize, or refine the query and gather more context,
+                       or return a clarifying question to the user.
 
 Every claim is grounded; sources are cited; when unsure it asks instead of guessing.
 """
@@ -70,7 +72,7 @@ def gather_sources_with_audit(query: str, tags: list[str], k: int = 4, region: s
                     "matched_query": qv["label"],
                 })
 
-    # 3) live web for the latest info
+    # 3) live web for the latest info; never writes to Pinecone.
     if USE_WEB:
         for qv in query_variants:
             for r in web.direct_sources(qv["query"], qv["lang"], k=3):
@@ -112,50 +114,27 @@ QUERY_CLUSTERS = [
     {"student visa", "study visa", "national visa", "studentenvisum", "visum zum studium", "visa for studies"},
     {"study", "studies", "studium", "student", "studenten", "studierenden", "university", "hochschule"},
     {"graduation", "graduate", "abschluss", "studienabschluss", "after studies", "nach dem studium"},
-    {"work", "job", "employment", "labour", "labor", "arbeit", "arbeiten", "arbeitsmarkt", "beschäftigung"},
-    {"registration", "register", "address", "anmeldung", "anmelden", "melde", "meldebehörde", "bürgeramt"},
+    {"work", "job", "employment", "labour", "labor", "arbeit", "arbeiten", "arbeitsmarkt", "beschaeftigung", "beschäftigung"},
+    {"registration", "register", "address", "anmeldung", "anmelden", "melde", "meldebehoerde", "meldebehorde", "buergeramt", "bürgeramt"},
     {"appointment", "booking", "book", "termin", "terminbuchung", "online appointment", "online-termin"},
     {"documents", "document", "paperwork", "checklist", "unterlagen", "dokumente", "nachweise", "checkliste"},
     {"health insurance", "insurance", "krankenversicherung", "versicherung"},
-    {"benefit", "child benefit", "kindergeld", "leistung", "leistungen", "bürgergeld", "jobcenter"},
+    {"benefit", "child benefit", "kindergeld", "leistung", "leistungen"},
     {"language course", "integration course", "deutschkurs", "sprachkurs", "integrationskurs"},
-    {"tax", "taxes", "steuer", "steuern", "finanzamt", "tax return", "steuererklärung"},
-    {"housing", "rent", "miete", "wohnung", "landlord", "vermieter", "mietvertrag"},
-    {"driving", "driver license", "führerschein", "auto", "car", "driving license"},
-    {"law", "recht", "contract", "vertrag", "police", "polizei", "lawyer", "anwalt", "legal"}
 ]
 
 IN_SCOPE_TERMS = {
     "immigration", "migration", "visa", "visum", "residence", "permit", "aufenthalt", "aufenthaltstitel",
-    "asylum", "asyl", "refugee", "flucht", "schutz", "naturalization", "citizenship", "einbürgerung",
-    "passport", "travel document", "blue card", "blaue karte", "registration", "anmeldung",
-    "melde", "bürgeramt", "ausländer", "ausländerbehörde", "jobcenter", "arbeitsagentur",
-    "work permit", "arbeitserlaubnis", "labour market", "arbeitsmarkt", "study", "studies", "student",
-    "graduation", "after studies", "studium", "university", "hochschule", "school", "schule",
-    "language course", "sprachkurs", "integration", "integrationskurs", "health insurance",
-    "krankenversicherung", "kindergeld", "bürgergeld", "benefit", "sozialleistung", "german law",
-    "german policy", "deutsches recht", "germany law", "travel to", "einreise", "entry requirement",
-    "tax", "steuer", "finanzamt", "rent", "miete", "wohnung", "housing", "contract", "vertrag", "law",
-    "recht", "bgb", "stgb", "police", "polizei", "insurance", "versicherung", "business", "gewerbe",
-    "freelance", "freiberuflich", "education", "ausbildung"
+    "asylum", "asyl", "refugee", "flucht", "schutz", "naturalization", "citizenship", "einbuergerung",
+    "einbürgerung", "passport", "travel document", "blue card", "blaue karte", "registration", "anmeldung",
+    "melde", "buergeramt", "bürgeramt", "auslaender", "ausländer", "auslaenderbehoerde", "ausländerbehörde",
+    "jobcenter", "arbeitsagentur", "work permit", "arbeitserlaubnis", "labour market", "arbeitsmarkt",
+    "study", "studies", "student", "graduation", "after studies", "studium", "university", "hochschule", "school", "schule", "language course", "sprachkurs",
+    "integration", "integrationskurs", "health insurance", "krankenversicherung", "kindergeld",
+    "buergergeld", "bürgergeld", "benefit", "sozialleistung", "german law", "german policy",
+    "deutsches recht", "germany law", "travel to", "einreise", "entry requirement",
 }
 
-def _rewrite_query(query: str, context: str, language: str) -> str:
-    """Uses the LLM to rewrite follow-up questions into standalone queries using the context history."""
-    if not context.strip():
-        return query
-    sys_msg = (
-        "You are a query rewriting assistant for a German legal/administrative AI. "
-        "Given the conversation context and a new follow-up query, rewrite the follow-up query "
-        "into a comprehensive, standalone search query that includes all necessary context (e.g. subjects, locations). "
-        "If the query is already standalone, return it as is. "
-        "Respond in strict JSON: {\"rewritten_query\": \"string\"}"
-    )
-    user_msg = f"Context:\n{context}\n\nFollow-up query: {query}"
-    res = llm.chat_json(sys_msg, user_msg, temperature=0.1)
-    if res and res.get("rewritten_query"):
-        return res["rewritten_query"]
-    return query
 
 def _query_variants(query: str, language: str) -> list[dict]:
     other = "de" if language == "en" else "en"
@@ -246,8 +225,7 @@ STOP = {
     "information", "info", "help", "need", "needs", "whole", "all", "any", "some",
     "germany", "bayern", "deutschland", "offizielle", "informationen", "hilfe",
     "welche", "schritte", "sind",
-    "für", "die", "der", "das", "und", "oder", "ich", "du", "sie", "zu", "dem", 
-    "den", "von", "auf", "mit", "sich", "des", "eine", "ein", "im", "aus"
+    "fuer", "für", "die", "der", "das", "und", "oder", "ich", "du", "sie",
 }
 
 
@@ -266,8 +244,8 @@ def _query_terms(query: str) -> set[str]:
     if _registration_topic(query):
         terms |= {
             "registration", "register", "address", "anmeldung", "anmelden",
-            "melde", "meldebehörde", "bürgeramt",
-            "wohnung", "wohnsitz", "wohnungsgeber", "bestätigung",
+            "melde", "meldebehoerde", "meldebehorde", "buergeramt", "burgeramt",
+            "wohnung", "wohnsitz", "wohnungsgeber", "bestaetigung", "bestatigung",
         }
     return terms
 
@@ -335,17 +313,16 @@ def _source_block(sources: list[dict]) -> str:
 def _draft_system(language: str) -> str:
     answer_language = "German" if language == "de" else "English"
     return (
-        "You are Wegweiser, an expert legal and administrative AI assistant for Germany. "
-        "Your goal is to help the user accurately, focusing on immigrants but covering all German laws, life, and administrative processes. "
+        "You are Wegweiser, a migration guidance assistant for newcomers in Germany. "
+        "Your goal is to help the user achieve their goal accurately. "
         "Use ONLY the provided sources. Cite them inline as [1], [2]. "
         f"Answer in {answer_language}. "
-        "1. Start with a comprehensive 'summary' of the answer based on the sources. "
-        "2. If the sources mention required documents, list them in 'document_checklist'. "
-        "3. If the sources outline steps or processes, list them in 'steps'. "
-        "4. If booking an appointment is required and online links/notes are found, fill 'booking'. "
-        "Do NOT easily say you do not know. If the sources contain relevant concepts or partial answers, synthesize and explain them. "
-        "Only if the sources are completely unrelated, state that the official information is missing. "
-        "Do NOT invent laws, dates, amounts, links, or rules. "
+        "The first part must always be a summary of the whole understanding. "
+        "If the sources include required documents, put them in document_checklist. "
+        "If the sources include actionable order, put it in steps. "
+        "If the task requires booking and the sources show it can be done online, set booking.online=true and include the official booking link. "
+        "If the sources do not support an answer, say that you do not know from the official sources in the summary. "
+        "Do NOT invent offices, dates, amounts, links, phone numbers, eligibility, or rules. "
         "Respond as strict JSON: "
         '{"summary": string, "document_checklist": string[], "steps": string[], '
         '"booking": {"needed": boolean, "online": boolean, "link": string, "note": string}, '
@@ -353,13 +330,11 @@ def _draft_system(language: str) -> str:
     )
 
 VERIFY_SYS = (
-    "You are an evaluator verifying a draft answer against the provided sources. "
-    "Check if the core claims in the draft are supported by the sources. "
-    "Verdict 'ok' if the answer is supported or contains reasonable inferences from the sources. "
-    "Verdict 'needs_user_input' if a crucial user-specific fact is missing to answer correctly (never assume - ask). "
-    "Verdict 'needs_more_context' if the sources lack key information but a better search might find it. "
-    "Verdict 'unsupported' ONLY if the draft hallucinates major facts not found in the sources at all. "
-    "If there are minor errors, provide a 'corrected_answer' based strictly on the sources. "
+    "You verify a draft answer against the sources, like a careful reviewer. Check every claim. "
+    "CAPTCHA, access-denied, security-block, or bot-check text is never a valid source and must be rejected. "
+    "Decide the verdict: 'ok' if fully supported; 'needs_user_input' if answering correctly REQUIRES a "
+    "user-specific fact that is missing (never assume it — ask); 'needs_more_context' if the sources are "
+    "insufficient and a better search could help; 'unsupported' if the draft makes claims the sources don't back. "
     "Respond as strict JSON: "
     '{"verdict": "ok|needs_user_input|needs_more_context|unsupported", '
     '"missing_question": string, "refined_query": string, "corrected_answer": string, "confidence": number}.'
@@ -382,14 +357,31 @@ def _verify(goal: str, draft: dict, sources: list[dict], language: str) -> dict 
 # --------------------------------------------------------------------------- #
 # Public entry
 # --------------------------------------------------------------------------- #
+def run_guided_flow(answers: dict | None, path: list[dict] | None, region: str = "",
+                    language: str = "en") -> dict:
+    clean_answers = _clean_guided_answers(answers or {})
+    clean_path = _clean_guided_path(path or [])
+    prompt = _guided_prompt(clean_answers, clean_path, language)
+    context = _guided_context(clean_answers, clean_path, language)
+    tags = _guided_tags(clean_answers)
+    clarifying = {key: _guided_value(value) for key, value in clean_answers.items() if _guided_value(value)}
+    result = run(prompt, tags, region, language, context, clarifying)
+    result["guided_context"] = {
+        "answers": clean_answers,
+        "path": clean_path,
+        "prompt": prompt,
+    }
+    return result
+
+
 def run(query: str, tags: list[str], region: str = "", language: str = "en",
         extra_context: str = "", clarifying_answers: dict | None = None) -> dict:
     answer_language = _detect_language(query, language)
     answer_context = _answers_context(clarifying_answers or {})
-    
     if answer_context:
         extra_context = f"{extra_context}\n{answer_context}".strip()
-        
+    goal = query if not extra_context else f"{query}\nPrevious conversation or extra user detail (use only if relevant):\n{extra_context[:1200]}"
+    retrieval_query = _contextual_query(query, extra_context)
     trace: list[str] = []
     llm_info = llm.available()
 
@@ -397,21 +389,16 @@ def run(query: str, tags: list[str], region: str = "", language: str = "en",
         trace.append("Stopped before retrieval: question is outside Wegweiser scope")
         return _with_runtime(_out_of_scope(answer_language, trace), [], llm_info)
 
-    # Rewrite the query based on conversation history
-    retrieval_query = _rewrite_query(query, extra_context, answer_language)
-    if retrieval_query != query:
-        trace.append(f"Rewrote query for context retention: '{retrieval_query}'")
-        
-    goal = f"Primary query: {query}\nResolved context query: {retrieval_query}\nExtra Context:\n{extra_context[:1200]}" if extra_context else query
-
-    missing_questions = _required_clarifications(retrieval_query, answer_language, extra_context)
+    missing_questions = _required_clarifications(query, answer_language, extra_context)
     if missing_questions:
         trace.append("Asked for missing user-specific facts before answering")
         return _with_runtime(_clarification_payload(answer_language, missing_questions, trace), [], llm_info)
 
     sources, considered = gather_sources_with_audit(retrieval_query, tags, region=region, language=answer_language)
     resources = _resources(considered)
-    trace.append("Searched with query variants")
+    trace.append("Searched with English and German query variants")
+    if extra_context:
+        trace.append("Used previous conversation context for this follow-up")
     trace.append(f"Considered {len(considered)} resources; kept {len(sources)} relevant sources")
 
     if _looks_vague(query) and not extra_context and len(sources) < 2 and not _registration_topic(query):
@@ -518,11 +505,9 @@ def _in_scope(query: str) -> bool:
     q = _normalize(query)
     if any(_normalize(term) in q for term in IN_SCOPE_TERMS):
         return True
-    
-    # Very broad fallback for general questions related to Germany/Rules/Life
-    legal_context = re.search(r"\b(germany|german|deutschland|deutsch|bavaria|bayern|here|hier)\b", q)
-    legal_topic = re.search(r"\b(law|policy|rule|rules|rights|pflicht|recht|gesetz|behörde|amt|how to|can i|darf|muss|wie)\b", q)
-    return bool(legal_context or legal_topic)
+    legal_context = re.search(r"\b(germany|german|deutschland|deutsch|bavaria|bayern)\b", q)
+    legal_topic = re.search(r"\b(law|policy|rule|rules|rights|pflicht|recht|gesetz|behörde|amt)\b", q)
+    return bool(legal_context and legal_topic)
 
 
 def _answers_context(answers: dict) -> str:
@@ -535,6 +520,99 @@ def _answers_context(answers: dict) -> str:
         if clean_key and clean_value:
             lines.append(f"Clarifying answer {clean_key}: {clean_value}")
     return "\n".join(lines)
+
+
+def _clean_guided_answers(answers: dict) -> dict:
+    out = {}
+    for key, value in answers.items():
+        clean_key = re.sub(r"[^a-zA-Z0-9_-]+", "", str(key))[:80]
+        if not clean_key:
+            continue
+        if isinstance(value, (str, int, float, bool)):
+            out[clean_key] = _guided_value(value)
+        elif isinstance(value, list):
+            out[clean_key] = [_guided_value(item) for item in value[:20] if _guided_value(item)]
+    return out
+
+
+def _clean_guided_path(path: list[dict]) -> list[dict]:
+    out = []
+    for item in path[:20]:
+        if not isinstance(item, dict):
+            continue
+        question = re.sub(r"\s+", " ", str(item.get("question", ""))).strip()[:260]
+        answer = re.sub(r"\s+", " ", str(item.get("answerLabel", ""))).strip()[:260]
+        node_id = re.sub(r"[^a-zA-Z0-9_-]+", "", str(item.get("nodeId", "")))[:80]
+        answer_key = re.sub(r"[^a-zA-Z0-9_-]+", "", str(item.get("answerKey", "")))[:80]
+        value = item.get("value", "")
+        out.append({
+            "nodeId": node_id,
+            "answerKey": answer_key,
+            "question": question,
+            "answerLabel": answer,
+            "value": _guided_value(value) if not isinstance(value, list) else [_guided_value(v) for v in value[:20]],
+        })
+    return [item for item in out if item["question"] or item["answerLabel"] or item["answerKey"]]
+
+
+def _guided_value(value: object) -> str:
+    text = re.sub(r"\s+", " ", str(value)).strip()
+    return text[:240]
+
+
+def _guided_prompt(answers: dict, path: list[dict], language: str) -> str:
+    trail = " -> ".join(item.get("answerLabel") or _guided_value(item.get("value", "")) for item in path)
+    trail = re.sub(r"\s+", " ", trail).strip()
+    planning = answers.get("locationIntent") == "planning_move"
+    visa = _guided_value(answers.get("visaStatus", ""))
+    age = _guided_value(answers.get("age", ""))
+    if language == "de":
+        parts = [
+            "Erstelle einen quellenbasierten Migrations-Guide fuer Deutschland.",
+            "Die Person plant den Umzug nach Deutschland." if planning else "Die Person ist bereits in Deutschland.",
+            f"Alter: {age}." if age else "",
+            f"Gewaehlter Visa- oder Aufenthaltsweg: {visa}." if visa else "",
+            f"Bubble-Pfad: {trail}." if trail else "",
+            "Gib Zusammenfassung, Dokumenten-Checkliste, konkrete Schritte, Termin-Hinweise und offizielle Quellen.",
+        ]
+    else:
+        parts = [
+            "Create a source-grounded migration guide for Germany.",
+            "The person is planning to move to Germany." if planning else "The person is already in Germany.",
+            f"Age: {age}." if age else "",
+            f"Selected visa or residence path: {visa}." if visa else "",
+            f"Bubble path: {trail}." if trail else "",
+            "Include a summary, document checklist, concrete steps, appointment notes, and official sources.",
+        ]
+    return " ".join(part for part in parts if part)
+
+
+def _guided_context(answers: dict, path: list[dict], language: str) -> str:
+    heading = "Gefuehrter Bubble-Kontext" if language == "de" else "Guided bubble context"
+    lines = [heading]
+    for index, item in enumerate(path, 1):
+        answer = item.get("answerLabel") or _guided_value(item.get("value", ""))
+        lines.append(f"{index}. {item.get('question') or item.get('answerKey')}: {answer}")
+    lines.append("Raw categories:")
+    for key, value in answers.items():
+        lines.append(f"- {key}: {_guided_value(value)}")
+    return "\n".join(lines)[:2400]
+
+
+def _guided_tags(answers: dict) -> list[str]:
+    tags = set()
+    if answers.get("locationIntent") == "planning_move" or answers.get("journeyStage") == "just_arrived":
+        tags.add("status:arriving")
+    visa = str(answers.get("visaStatus", ""))
+    if visa == "student":
+        tags.add("status:student")
+    if visa in {"work", "skilled_work", "blue_card", "opportunity_card", "vocational_training"}:
+        tags.add("status:worker")
+    if visa == "family":
+        tags.add("status:family")
+    if visa == "asylum":
+        tags.add("status:asylum")
+    return sorted(tags)
 
 
 def _required_clarifications(query: str, language: str, extra_context: str) -> list[dict]:
@@ -741,14 +819,14 @@ def _broad_immigration_topic(query: str) -> bool:
 def _has_specific_immigration_area(text: str) -> bool:
     return bool(re.search(
         r"\b(visa|visum|entry|einreise|residence|aufenthalt|study|studium|student|work|arbeit|job|"
-        r"family|familie|asylum|asyl|refugee|citizenship|naturalization|einbürgerung)\b",
+        r"family|familie|asylum|asyl|refugee|citizenship|naturalization|einbuergerung|einbürgerung)\b",
         text,
     ))
 
 
 def _has_nationality_context(text: str) -> bool:
     return bool(re.search(
-        r"\b(nationality|citizenship|citizen|passport|staatsangehörigkeit|pass|"
+        r"\b(nationality|citizenship|citizen|passport|staatsangehoerigkeit|staatsangehörigkeit|pass|"
         r"pakistani|indian|syrian|turkish|ukrainian|german citizen|deutscher|deutsche|eu citizen)\b",
         text,
     ))
@@ -760,7 +838,7 @@ def _has_status_context(text: str) -> bool:
     return bool(re.search(
         r"\b(student residence|student visa|work permit|blue card|permanent|asylum|refugee|subsidiary|"
         r"temporary protection|family reunification|schengen|visitor|aufenthaltstitel|aufenthaltserlaubnis|"
-        r"niederlassung|blaue karte|asyl|flüchtling|familiennachzug|duldung|studentenvisum|arbeitsvisum|besuchsvisum|"
+        r"niederlassung|blaue karte|asyl|fluechtling|flüchtling|familiennachzug|duldung|studentenvisum|arbeitsvisum|besuchsvisum|"
         r"german_or_eu|asylum_protection|temporary_protection)\b",
         text,
     ))
@@ -773,6 +851,13 @@ def _has_travel_purpose(text: str) -> bool:
         r"\d+\s*(day|days|week|weeks|month|months|year|years|tag|tage|woche|wochen|monat|monate|jahr|jahre))\b",
         text,
     ))
+
+
+def _contextual_query(query: str, extra_context: str) -> str:
+    if not extra_context:
+        return query
+    compact = re.sub(r"\s+", " ", extra_context).strip()
+    return f"{query} {compact[:700]}"
 
 
 def _ensure_summary(answer: str, language: str) -> str:
@@ -877,8 +962,6 @@ def _extractive_answer(query: str, sources: list[dict], language: str) -> str:
         return _student_visa_answer(language)
     if not sources or not _registration_topic(query):
         return _generic_extractive_answer(query, sources, language)
-    
-    # Registration extractive answer
     text = " ".join((s.get("title", "") + ". " + s.get("text", "")) for s in sources[:3])
     terms = _query_terms(query)
     if len(terms & _text_terms(text)) < 2:
@@ -912,7 +995,8 @@ def _post_study_answer(language: str) -> str:
             "2. Beantrage den Aufenthaltstitel zur Arbeitsplatzsuche nach dem Studium.\n"
             "3. Suche eine qualifizierte Beschäftigung, die zu deinem Abschluss passt.\n"
             "4. Wenn du einen passenden Job hast, beantrage den Wechsel in den passenden Aufenthaltstitel, z. B. Beschäftigung als Fachkraft oder Blaue Karte EU.\n\n"
-            "Terminbuchung\nWenn deine Ausländerbehörde Online-Termine anbietet, nutze deren offizielle Terminseite."
+            "Terminbuchung\nWenn deine Ausländerbehörde Online-Termine anbietet, nutze deren offizielle Terminseite. "
+            "Ich habe keinen einzelnen bayernweiten Buchungslink in den Quellen."
         )
     return (
         "Summary\nAfter successfully completing studies in Germany, you can usually apply for a residence permit "
@@ -924,7 +1008,8 @@ def _post_study_answer(language: str) -> str:
         "2. Apply for the post-study job-search residence permit.\n"
         "3. Look for qualified employment that matches your degree.\n"
         "4. Once you have a suitable job, apply to switch to the correct residence title, such as skilled employment or the EU Blue Card.\n\n"
-        "Booking\nIf your immigration office offers online appointments, use its official appointment page."
+        "Booking\nIf your immigration office offers online appointments, use its official appointment page. "
+        "I did not find one single Bavaria-wide booking link in the sources."
     )
 
 
@@ -989,7 +1074,7 @@ def _generic_extractive_answer(query: str, sources: list[dict], language: str) -
         source_text = f"{s.get('title', '')}. {s.get('text', '')}"
         for sentence in _sentences(source_text):
             score = len(terms & _text_terms(sentence))
-            if score >= 1:  # lower threshold to allow more flexible fallback extractions
+            if score >= 2:
                 scored.append((score, sentence))
     scored.sort(key=lambda item: item[0], reverse=True)
     facts = []
@@ -1015,10 +1100,10 @@ def _sentences(text: str) -> list[str]:
 def _not_enough_info(language: str, citations: list[dict], trace: list[str], confidence: float) -> dict:
     if language == "de":
         answer = ("Zusammenfassung\nIch weiß es aus den vorliegenden offiziellen Quellen nicht sicher. "
-                  "Bitte gib mehr Details an oder sprich mit einer zuständigen Behörde oder Beratung.")
+                  "Bitte gib mehr Details an oder sprich mit einer Beratungsperson.")
     else:
         answer = ("Summary\nI don't know this safely from the available official sources. "
-                  "Please add more detail or speak with the responsible authority or counselor.")
+                  "Please add more detail or speak with a counselor.")
     return {"answer": answer, "citations": citations, "confidence": confidence,
             "escalate": True, "trace": trace, "needs_input": False}
 
@@ -1049,7 +1134,7 @@ def _detect_language(query: str, requested: str) -> str:
     if re.search(r"[äöüß]", query, re.I):
         return "de"
     german_markers = [" ich ", " kann ", " wie ", " wo ", " was ", " warum ", " brauche ",
-                      " bekomme ", " anmelden", " ausländer", " arbeit", " darf ", " muss ", "steuer"]
+                      " bekomme ", " anmelden", " ausländer", " arbeit", " darf ", " muss "]
     if any(m in q for m in german_markers):
         return "de"
     return "de" if requested == "de" else "en"

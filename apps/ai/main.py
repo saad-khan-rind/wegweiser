@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+from typing import Union
 
 from envloader import load_env
 
@@ -30,7 +31,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 log = logging.getLogger("main")
 _corpus = Retriever()
 
-app = FastAPI(title="Wegweiser AI", version="0.2.1")
+app = FastAPI(title="Wegweiser AI", version="0.2.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
@@ -44,6 +45,21 @@ class AgentRequest(BaseModel):
     language: str = "en"
     extra_context: str = ""
     clarifying_answers: dict[str, str] = {}
+
+
+class GuidedFlowPathItem(BaseModel):
+    nodeId: str = ""
+    answerKey: str = ""
+    question: str = ""
+    value: Union[str, int, float, list[str]] = ""
+    answerLabel: str = ""
+
+
+class GuidedFlowRequest(BaseModel):
+    answers: dict[str, object] = {}
+    path: list[GuidedFlowPathItem] = []
+    region: str = ""
+    language: str = "en"
 
 
 class RetrieveRequest(BaseModel):
@@ -85,6 +101,16 @@ def health() -> dict:
 @app.post("/agent")
 def run_agent(req: AgentRequest) -> dict:
     return agent.run(req.query, req.tags, req.region, _lang(req.language), req.extra_context, req.clarifying_answers)
+
+
+@app.post("/guided-flow")
+def run_guided_flow(req: GuidedFlowRequest) -> dict:
+    return agent.run_guided_flow(
+        req.answers,
+        [item.model_dump() for item in req.path],
+        req.region,
+        _lang(req.language),
+    )
 
 
 @app.post("/retrieve")

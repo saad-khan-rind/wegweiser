@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import re
 import urllib.request
 import urllib.error
 import urllib.parse
@@ -23,8 +22,9 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama:11434").rstrip("/")
 CHAT_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
+# CPU inference is slow; default to a long ceiling so requests aren't killed.
 LLM_TIMEOUT = int(os.getenv("LLM_TIMEOUT", "180"))
-NUM_PREDICT = int(os.getenv("LLM_NUM_PREDICT", "1024"))
+NUM_PREDICT = int(os.getenv("LLM_NUM_PREDICT", "900"))
 _embed_warned = False
 
 
@@ -130,6 +130,8 @@ def embed(text: str) -> list[float] | None:
     global _embed_warned
     last_error: Exception | None = None
     try:
+        # Ollama's current embeddings endpoint is /api/embed. Older installs
+        # used /api/embeddings, so keep both for compatibility.
         data = _post("/api/embed", {"model": EMBED_MODEL, "input": text}, 60)
         embeddings = data.get("embeddings")
         emb = embeddings[0] if isinstance(embeddings, list) and embeddings else data.get("embedding")
@@ -152,17 +154,11 @@ def embed(text: str) -> list[float] | None:
 def _parse_json(raw: str) -> dict | None:
     if not raw:
         return None
-    # Strip markdown block quotes
-    cleaned = re.sub(r"```[jJ][sS][oO][nN]", "", raw)
-    cleaned = re.sub(r"```", "", cleaned).strip()
-    
-    # Grab whatever is between the first { and the last }
+    cleaned = raw.replace("```json", "").replace("```", "").strip()
     start, end = cleaned.find("{"), cleaned.rfind("}")
     if start == -1 or end == -1:
         return None
-        
     try:
         return json.loads(cleaned[start:end + 1])
-    except Exception as e:  # noqa: BLE001
-        log.warning("JSON parsing failed, returning None: %s", e)
+    except Exception:  # noqa: BLE001
         return None

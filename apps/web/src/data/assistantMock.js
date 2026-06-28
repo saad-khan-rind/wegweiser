@@ -27,15 +27,16 @@ export function detectIntent(prompt) {
 
 /**
  * Fixed category ranking for action cards. Lower rank renders first.
- * documents < office < process < timeline < sources < other
+ * summary < documents < office < process < timeline < other < sources
  */
 const CATEGORY_RANK = {
-  documents: 0,
-  office: 1,
-  process: 2,
-  timeline: 3,
-  sources: 4,
+  summary: 0,
+  documents: 1,
+  office: 2,
+  process: 3,
+  timeline: 4,
   other: 5,
+  sources: 6,
 }
 
 /**

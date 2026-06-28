@@ -1,44 +1,249 @@
+"""Vector store abstraction.
+
+Uses Pinecone when PINECONE_API_KEY is set; otherwise an in-memory cosine store
+so the whole pipeline (admin upload, RAG, citations) works in a demo without any
+external account. Same interface either way.
+"""
+from __future__ import annotations
+import logging
+import math
 import os
-from typing import List, Dict, Any
-# Assumes standard embedding definitions exist in embeddings.py
-from embeddings import get_embedding_engine 
+import threading
+import time
 
-class MockDocument:
-    def __init__(self, page_content: str, metadata: Dict[str, Any]):
-        self.page_content = page_content
-        self.metadata = metadata
+import embeddings
+from envloader import load_env
 
-class VectorStore:
-    def __init__(self):
-        self.embeddings = get_embedding_engine()
-        # Internal store interface placeholder (e.g., FAISS, Chroma, or PgVector Client)
-        
-    def similarity_search(self, standalone_query: str, k: int = 5) -> List[MockDocument]:
-        """
-        Executes a localized hybrid ranking approximation. It queries via embeddings 
-        while filtering/boosting hits that closely correspond to legal paragraph tokens.
-        """
-        # 1. Vector Search execution via generation of sparse/dense arrays
-        query_vector = self.embeddings.embed_query(standalone_query)
-        
-        # Placeholder for low-level vector db query execution returning raw matches
-        # raw_results = self.client.search(vector=query_vector, limit=k*2)
-        
-        # 2. Heuristic boosting for exact statutory matches (e.g., "§ 18a", "§ 19c")
-        # Ensure that exact legal codes bypass mathematical variance limits in vector space
-        words = standalone_query.split()
-        paragraph_tokens = [w for w in words if "§" in w or w.isdigit()]
-        
-        # Emulated document matching processing matching the structure of apps/ai/corpus/
-        processed_documents = [
-            MockDocument(
-                page_content="Requirements for the EU Blue Card (§ 18b AufenthG): Academic degree recognition via Anabin, a concrete job offer matching qualification boundaries, and meeting the statutory minimum gross salary threshold.",
-                metadata={"source": "residence.md", "paragraph": "§ 18b"}
-            ),
-            MockDocument(
-                page_content="Anmeldung procedures require verification of housing space confirmation (Wohnungsgeberbestätigung) within 14 days of moving in.",
-                metadata={"source": "anmeldung.md", "paragraph": "General"}
+log = logging.getLogger("vectorstore")
+
+load_env()
+
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
+PINECONE_INDEX = os.getenv("PINECONE_INDEX", "wegweiser")
+PINECONE_CLOUD = os.getenv("PINECONE_CLOUD", "aws")
+PINECONE_REGION = os.getenv("PINECONE_REGION", "us-east-1")
+PINECONE_UPSERT_BATCH = max(1, int(os.getenv("PINECONE_UPSERT_BATCH", "50")))
+PINECONE_TEXT_METADATA_CHARS = max(300, int(os.getenv("PINECONE_TEXT_METADATA_CHARS", "1500")))
+_last_error = ""
+
+
+class Record(dict):
+    """{id, text, metadata{title,source,url,date,...}}"""
+
+
+class BaseStore:
+    backend = "base"
+
+    def upsert(self, records: list[dict]) -> int:
+        raise NotImplementedError
+
+    def query(self, text: str, k: int = 4) -> list[dict]:
+        raise NotImplementedError
+
+    def list(self, limit: int = 100) -> list[dict]:
+        raise NotImplementedError
+
+    def get(self, record_id: str) -> dict | None:
+        raise NotImplementedError
+
+    def clear(self) -> int:
+        raise NotImplementedError
+
+
+class MemoryStore(BaseStore):
+    backend = "memory"
+
+    def __init__(self) -> None:
+        self._items: list[dict] = []
+        self._lock = threading.Lock()
+
+    def upsert(self, records: list[dict]) -> int:
+        with self._lock:
+            for r in records:
+                vec = embeddings.embed_text(r["text"])
+                existing = next((i for i in self._items if i["id"] == r["id"]), None)
+                payload = {"id": r["id"], "vec": vec, "text": r["text"], "metadata": r.get("metadata", {})}
+                if existing:
+                    self._items[self._items.index(existing)] = payload
+                else:
+                    self._items.append(payload)
+        return len(records)
+
+    def query(self, text: str, k: int = 4) -> list[dict]:
+        if not self._items:
+            return []
+        q = embeddings.embed_text(text)
+        scored = []
+        for it in self._items:
+            scored.append((_cosine(q, it["vec"]), it))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        out = []
+        for s, it in scored[:k]:
+            if s <= 0:
+                continue
+            out.append({"id": it["id"], "score": round(s, 4), "text": it["text"], "metadata": it["metadata"]})
+        return out
+
+    def list(self, limit: int = 100) -> list[dict]:
+        return [{"id": i["id"], "metadata": i["metadata"]} for i in self._items[:limit]]
+
+    def get(self, record_id: str) -> dict | None:
+        with self._lock:
+            item = next((i for i in self._items if i["id"] == record_id), None)
+            if not item:
+                return None
+            return {"id": item["id"], "text": item["text"], "metadata": item["metadata"]}
+
+    def clear(self) -> int:
+        with self._lock:
+            n = len(self._items)
+            self._items = []
+            return n
+
+
+class PineconeStore(BaseStore):
+    backend = "pinecone"
+
+    def __init__(self) -> None:
+        from pinecone import Pinecone, ServerlessSpec  # type: ignore
+        self._pc = Pinecone(api_key=PINECONE_API_KEY)
+        names = []
+        for i in self._pc.list_indexes():
+            n = getattr(i, "name", None) or (i.get("name") if isinstance(i, dict) else None)
+            if n:
+                names.append(n)
+        if PINECONE_INDEX not in names:
+            log.info("Creating Pinecone index %s (dim=%s)", PINECONE_INDEX, embeddings.dim())
+            self._pc.create_index(
+                name=PINECONE_INDEX,
+                dimension=embeddings.dim(),
+                metric="cosine",
+                spec=ServerlessSpec(cloud=PINECONE_CLOUD, region=PINECONE_REGION),
             )
-        ]
-        
-        return processed_documents[:k]
+            time.sleep(2)
+        self._index = self._pc.Index(PINECONE_INDEX)
+
+    def upsert(self, records: list[dict]) -> int:
+        vectors = []
+        for r in records:
+            md = _clean_metadata(dict(r.get("metadata", {})))
+            md["text"] = (r.get("text") or "")[:PINECONE_TEXT_METADATA_CHARS]
+            vectors.append({"id": r["id"], "values": embeddings.embed_text(r["text"]), "metadata": md})
+        try:
+            for start in range(0, len(vectors), PINECONE_UPSERT_BATCH):
+                batch = vectors[start:start + PINECONE_UPSERT_BATCH]
+                self._index.upsert(vectors=batch)
+            return len(vectors)
+        except Exception as e:  # noqa: BLE001
+            global _last_error
+            _last_error = str(e)
+            log.warning("Pinecone upsert failed: %s", e)
+            raise
+
+    def query(self, text: str, k: int = 4) -> list[dict]:
+        try:
+            res = self._index.query(vector=embeddings.embed_text(text), top_k=k, include_metadata=True)
+            matches = res.get("matches", []) if isinstance(res, dict) else getattr(res, "matches", [])
+            out = []
+            for m in matches:
+                md = (m.get("metadata") if isinstance(m, dict) else getattr(m, "metadata", {})) or {}
+                mid = m.get("id") if isinstance(m, dict) else getattr(m, "id", "")
+                score = m.get("score") if isinstance(m, dict) else getattr(m, "score", 0)
+                out.append({"id": mid, "score": score, "text": md.get("text", ""), "metadata": md})
+            return out
+        except Exception as e:  # noqa: BLE001
+            global _last_error
+            _last_error = str(e)
+            log.warning("Pinecone query failed; continuing without vector matches: %s", e)
+            return []
+
+    def list(self, limit: int = 100) -> list[dict]:
+        try:
+            stats = self._index.describe_index_stats()
+            return [{"id": "(pinecone)", "metadata": {"total": stats.get("total_vector_count", 0)}}]
+        except Exception as e:  # noqa: BLE001
+            global _last_error
+            _last_error = str(e)
+            return []
+
+    def get(self, record_id: str) -> dict | None:
+        try:
+            res = self._index.fetch(ids=[record_id])
+            vectors = res.get("vectors", {}) if isinstance(res, dict) else getattr(res, "vectors", {})
+            item = vectors.get(record_id) if isinstance(vectors, dict) else None
+            if not item:
+                return None
+            md = (item.get("metadata") if isinstance(item, dict) else getattr(item, "metadata", {})) or {}
+            return {"id": record_id, "text": md.get("text", ""), "metadata": md}
+        except Exception as e:  # noqa: BLE001
+            global _last_error
+            _last_error = str(e)
+            return None
+
+    def clear(self) -> int:
+        try:
+            before = self._index.describe_index_stats().get("total_vector_count", 0)
+            self._index.delete(delete_all=True)
+            return int(before or 0)
+        except Exception as e:  # noqa: BLE001
+            global _last_error
+            _last_error = str(e)
+            raise
+
+
+def diagnostics() -> dict:
+    return {
+        "configured": bool(PINECONE_API_KEY),
+        "backend": _store.backend if _store is not None else "not_initialized",
+        "index": PINECONE_INDEX,
+        "cloud": PINECONE_CLOUD,
+        "region": PINECONE_REGION,
+        "embedding_provider": embeddings.provider(),
+        "embedding_dim": embeddings.dim(),
+        "last_error": _last_error,
+    }
+
+
+def _cosine(a: list[float], b: list[float]) -> float:
+    n = min(len(a), len(b))
+    dot = sum(a[i] * b[i] for i in range(n))
+    na = math.sqrt(sum(x * x for x in a[:n])) or 1.0
+    nb = math.sqrt(sum(x * x for x in b[:n])) or 1.0
+    return dot / (na * nb)
+
+
+def _clean_metadata(metadata: dict) -> dict:
+    cleaned = {}
+    for key, value in metadata.items():
+        if value is None:
+            continue
+        if isinstance(value, str):
+            cleaned[key] = value[:1200]
+        elif isinstance(value, bool | int | float):
+            cleaned[key] = value
+        elif isinstance(value, list):
+            cleaned[key] = [str(item)[:200] for item in value[:50]]
+        else:
+            cleaned[key] = str(value)[:1200]
+    return cleaned
+
+
+_store: BaseStore | None = None
+
+
+def get_store() -> BaseStore:
+    global _last_error
+    global _store
+    if _store is not None:
+        return _store
+    if PINECONE_API_KEY:
+        try:
+            _store = PineconeStore()
+            log.info("Vector store: Pinecone (%s)", PINECONE_INDEX)
+            return _store
+        except Exception as e:  # noqa: BLE001
+            _last_error = str(e)
+            log.warning("Pinecone unavailable (%s); using in-memory store", e)
+    _store = MemoryStore()
+    log.info("Vector store: in-memory")
+    return _store

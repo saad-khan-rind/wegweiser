@@ -185,7 +185,7 @@ function buildCardsFromAnswer(data, code) {
       description: summaryBody.length > 120 ? `${summaryBody.slice(0, 117)}…` : summaryBody,
       icon: 'Sparkles',
       status: 'recommended',
-      category: 'other',
+      category: 'summary',
       classification: 'advisable',
       content: { body: summaryBody },
     })
@@ -275,7 +275,7 @@ function buildCardsFromAnswer(data, code) {
       description: '',
       icon: 'Sparkles',
       status: 'recommended',
-      category: 'other',
+      category: 'summary',
       classification: 'advisable',
       content: { body: String(data.answer).trim() },
     })

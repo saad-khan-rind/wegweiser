@@ -72,10 +72,7 @@ export function NavigatorEntry({ onStart, loading = false, error }) {
         errorMessage={gridError}
       />
 
-      <div className="flex flex-col gap-2">
-        <span className="text-sm font-medium text-charcoal">
-          {t('landing.freeTextLabel')}
-        </span>
+      <div>
         <FollowUpInput
           onSubmit={handleFreeTextSubmit}
           loading={loading}

@@ -11,11 +11,9 @@ import {
 import { downloadWalletBundleAsPdf } from '../../../../utils/walletExport'
 import { AssistantLoadingCards } from './AssistantEmptyState'
 import { CardGroupList } from './CardGroupList'
-import { ContextSummary } from './ContextSummary'
 import { FollowUpInput } from './FollowUpInput'
 import { GuidedStepPanel } from './GuidedStepPanel'
 import { NavigatorEntry } from './NavigatorEntry'
-import { SessionHeader } from './SessionHeader'
 import { SummaryCard } from './SummaryCard'
 import { WalletPanel, WalletToolbar } from './WalletPanel'
 import { MyInfoPanel } from '../MyInfoPanel'
@@ -70,8 +68,6 @@ function AssistantWorkspaceContent() {
     }
   }, [location.state, activeSession, submitPrompt])
 
-  const contextSummary =
-    latestCardGroup?.contextSummary ?? activeSession?.guidedState?.contextSummary
   const showWalletActions = !showGuidedSteps && cardGroups.length > 0
 
   const handleStart = (seed) => submitPrompt(seed.prompt, { intent: seed.intent })
@@ -129,14 +125,6 @@ function AssistantWorkspaceContent() {
         <NavigatorEntry onStart={handleStart} loading={loading} error={error} />
       ) : (
         <div className="flex flex-col gap-5 pb-4">
-          {summary && (
-            <SummaryCard
-              summary={summary}
-              onAddToWallet={cardGroups.length > 0 ? addSummaryToWallet : undefined}
-              inWallet={isSummaryInWallet()}
-            />
-          )}
-
           {showGuidedSteps && (
             <>
               <p className="text-sm text-slate-600">
@@ -178,6 +166,31 @@ function AssistantWorkspaceContent() {
             </>
           )}
 
+          {summary && (
+            <SummaryCard
+              summary={summary}
+              onAddToWallet={cardGroups.length > 0 ? addSummaryToWallet : undefined}
+              inWallet={isSummaryInWallet()}
+            />
+          )}
+
+          {showWalletActions && (
+            <>
+              <WalletToolbar
+                walletCount={walletItems.length}
+                onSaveAll={addSessionToWallet}
+                onDownloadBundle={handleDownloadSession}
+                onToggleWallet={() => setWalletOpen((v) => !v)}
+                walletOpen={walletOpen}
+                saving={loading}
+              />
+
+              {walletOpen && (
+                <WalletPanel items={walletItems} onRemove={removeFromWallet} />
+              )}
+            </>
+          )}
+
           <FollowUpInput
             onSubmit={handlePrompt}
             loading={loading}
@@ -194,32 +207,6 @@ function AssistantWorkspaceContent() {
               {error}
             </p>
           )}
-
-          <div className="space-y-4">
-            <SessionHeader
-              originalPrompt={activeSession.originalPrompt}
-              followUpPrompts={activeSession.followUpPrompts}
-            />
-
-            <ContextSummary contextSummary={contextSummary} />
-
-            {showWalletActions && (
-              <>
-                <WalletToolbar
-                  walletCount={walletItems.length}
-                  onSaveAll={addSessionToWallet}
-                  onDownloadBundle={handleDownloadSession}
-                  onToggleWallet={() => setWalletOpen((v) => !v)}
-                  walletOpen={walletOpen}
-                  saving={loading}
-                />
-
-                {walletOpen && (
-                  <WalletPanel items={walletItems} onRemove={removeFromWallet} />
-                )}
-              </>
-            )}
-          </div>
         </div>
       )}
 

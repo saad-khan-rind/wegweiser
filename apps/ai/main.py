@@ -30,7 +30,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 log = logging.getLogger("main")
 _corpus = Retriever()
 
-app = FastAPI(title="Wegweiser AI", version="0.2.0")
+app = FastAPI(title="Wegweiser AI", version="0.2.1")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 

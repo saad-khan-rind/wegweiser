@@ -13,8 +13,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 CORPUS_DIR = Path(__file__).parent / "corpus"
+
+# Expanded stopwords list to ensure semantic words weigh heavier than common German/English grammar
 STOP = set("the a an to of in on for and or is are i my me do how what can where "
-           "when with you your it as be at this that".split())
+           "when with you your it as be at this that der die das und in den von zu dem für "
+           "auf mit sich des eine ein im aus über um nach als durch zur zum".split())
 
 
 @dataclass
@@ -30,7 +33,7 @@ class Doc:
 
 
 def _stem(w: str) -> str:
-    for suf in ("ing", "ed", "es", "s"):
+    for suf in ("ing", "ed", "es", "s", "en", "em", "er"):
         if len(w) > len(suf) + 2 and w.endswith(suf):
             return w[: -len(suf)]
     return w

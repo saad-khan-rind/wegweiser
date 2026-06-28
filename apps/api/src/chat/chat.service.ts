@@ -147,8 +147,8 @@ export class ChatService {
     if (!docs.length) {
       return {
         answer: language === "de"
-          ? "Ich konnte dafür keine sichere Antwort in den offiziellen Quellen finden. Eine Beratungsperson kann helfen."
-          : "I couldn't find a confident answer in the official sources. A human counselor can help with this.",
+          ? "Zusammenfassung\nIch konnte dafür keine sichere Antwort in den offiziellen Quellen finden. Eine Beratungsperson kann helfen."
+          : "Summary\nI couldn't find a confident answer in the official sources. A human counselor can help with this.",
         cards: [{ kind: "escalate", title: language === "de" ? "Mit Beratung sprechen" : "Talk to a counselor", body: language === "de" ? "Kostenlos und vertraulich." : "Free and confidential." }],
         sources: [], confidence: 0.2, escalate: true, deidentifiedQuery: query, provider: this.llm.provider,
         model: process.env.OLLAMA_MODEL ?? "",
@@ -159,7 +159,7 @@ export class ChatService {
     if (composed && composed.answer) {
       const cards = composed.cards.length ? composed.cards : this.cardsFor(escalate, language);
       return {
-        answer: composed.answer, cards, sources,
+        answer: ensureSummary(composed.answer, language), cards, sources,
         confidence: clamp(escalate ? Math.min(composed.confidence, 0.6) : composed.confidence),
         escalate: composed.escalate || escalate, deidentifiedQuery: query, provider: this.llm.provider,
         model: process.env.OLLAMA_MODEL ?? "",
@@ -184,8 +184,8 @@ export class ChatService {
     }
     return {
       answer: language === "de"
-        ? "Ich habe relevante Quellen gefunden, kann daraus aber gerade keine sicher geprüfte Antwort formulieren. Bitte lies die Quellen oder frage eine Beratungsperson."
-        : "I found relevant sources, but I can't safely compose a verified answer from them right now. Please read the sources or ask a counselor.",
+        ? "Zusammenfassung\nIch habe relevante Quellen gefunden, kann daraus aber gerade keine sicher geprüfte Antwort formulieren. Bitte lies die Quellen oder frage eine Beratungsperson."
+        : "Summary\nI found relevant sources, but I can't safely compose a verified answer from them right now. Please read the sources or ask a counselor.",
       cards: this.cardsFor(true, language), sources,
       confidence: 0.35,
       escalate: true, deidentifiedQuery: query, provider: "mock", model: "",
@@ -199,7 +199,10 @@ export class ChatService {
       "You are Wegweiser, a migration guidance assistant for newcomers in Germany, built on official sources.",
       "Answer ONLY from the provided sources. If the sources do not answer the question, say so and recommend a human counselor.",
       `Answer in ${answerLanguage}.`,
-      "Be brief: 2-3 sentences maximum, plain language, no jargon.",
+      "Format the answer with these sections when relevant: Summary, Document checklist, Actionable steps, Booking.",
+      "The first section must always be Summary/Zusammenfassung.",
+      "Only include booking links when they appear in the provided sources.",
+      "Be brief, plain language, no jargon.",
       "Never ask for or use personal data. Never invent facts, offices, dates, or amounts.",
       'Respond as strict JSON: {"answer": string, "cards": [{"kind": "explain|office|appointment|upload|deadline|escalate|checklist|link", "title": string, "body"?: string, "meta"?: string}], "confidence": number(0..1), "escalate": boolean}.',
       "Set escalate=true for legal, medical, or distressing situations.",
@@ -234,10 +237,16 @@ function clamp(n: number): number {
   return Math.max(0, Math.min(1, n));
 }
 
+function ensureSummary(answer: string, language: "en" | "de"): string {
+  const text = (answer || "").trim();
+  if (/^(summary|zusammenfassung)\b/i.test(text)) return text;
+  return `${language === "de" ? "Zusammenfassung" : "Summary"}\n${text}`;
+}
+
 function registrationFallback(query: string, language: "en" | "de"): string {
   const q = query.toLowerCase();
   if (!/(anmeldung|anmelden|registration|register|address|melde|wohnsitz)/i.test(q)) return "";
   return language === "de"
-    ? "Für die Anmeldung meldest du deine Wohnung bei der zuständigen Meldebehörde oder beim Bürgeramt an. Bring deinen Pass oder Ausweis und die Wohnungsgeberbestätigung mit; prüfe zusätzlich die Terminseite deiner Stadt."
-    : "For city registration, register your address with the local registration office or Bürgeramt. Bring your passport or ID and the landlord confirmation; also check your city's appointment page for local requirements.";
+    ? "Zusammenfassung\nFür die Anmeldung meldest du deine Wohnung bei der zuständigen Meldebehörde oder beim Bürgeramt an.\n\nDokumenten-Checkliste\n- Pass oder Ausweis\n- Wohnungsgeberbestätigung\n\nSchritte\n1. Prüfe die zuständige Meldebehörde oder das Bürgeramt deiner Stadt.\n2. Bereite Pass/Ausweis und Wohnungsgeberbestätigung vor.\n3. Prüfe die Terminseite deiner Stadt, falls ein Termin erforderlich ist."
+    : "Summary\nFor city registration, register your address with the local registration office or Bürgeramt.\n\nDocument checklist\n- Passport or ID\n- Landlord confirmation\n\nActionable steps\n1. Check the responsible registration office or Bürgeramt for your city.\n2. Prepare your passport/ID and landlord confirmation.\n3. Check your city appointment page if an appointment is required.";
 }

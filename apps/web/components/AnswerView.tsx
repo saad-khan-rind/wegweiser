@@ -32,7 +32,7 @@ export default function AnswerView({
         </div>
       )}
 
-      <p className="text-[15px] leading-relaxed text-ink">{result.answer}</p>
+      <div className="whitespace-pre-line text-[15px] leading-relaxed text-ink">{result.answer}</div>
 
       <div className="mt-3 grid gap-2">
         {result.cards.map((card, i) => (

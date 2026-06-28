@@ -13,6 +13,7 @@ export default function Page() {
   const [query, setQuery] = useState("");
   const [lastQuery, setLastQuery] = useState("");
   const [extraContext, setExtraContext] = useState("");
+  const [conversationContext, setConversationContext] = useState("");
   const [result, setResult] = useState<AnswerResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle", msg: "" });
@@ -41,10 +42,19 @@ export default function Page() {
     setResult(null);
     if (!extra) setLastQuery(query);
     try {
-      const r = await ask(extra ? lastQuery || query : query, wallet, extra);
+      const activeQuery = extra ? lastQuery || query : query;
+      const outgoingContext = [conversationContext, extra ? `User follow-up detail: ${extra}` : ""]
+        .filter(Boolean)
+        .join("\n");
+      const r = await ask(activeQuery, wallet, outgoingContext);
       setResult(r);
       setStatus({ kind: "ok", msg: r.needsInput ? "The assistant needs one detail before answering." : "Answer generated from available sources." });
       setExtraContext("");
+      if (!r.needsInput) {
+        const compactAnswer = (r.answer || "").replace(/\s+/g, " ").slice(0, 700);
+        const nextContext = `${conversationContext}\nUser asked: ${activeQuery}\nAssistant answered: ${compactAnswer}`.trim();
+        setConversationContext(nextContext.slice(-1800));
+      }
     } catch (e) {
       setStatus({ kind: "err", msg: (e as Error).message });
     } finally {

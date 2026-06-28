@@ -24,7 +24,7 @@ EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-flash-latest")
 # CPU inference is slow; default to a long ceiling so requests aren't killed.
 LLM_TIMEOUT = int(os.getenv("LLM_TIMEOUT", "180"))
-NUM_PREDICT = int(os.getenv("LLM_NUM_PREDICT", "512"))
+NUM_PREDICT = int(os.getenv("LLM_NUM_PREDICT", "900"))
 _embed_warned = False
 
 

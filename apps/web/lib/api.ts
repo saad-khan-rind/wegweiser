@@ -29,6 +29,7 @@ function timeoutMs(): number {
 
 export async function ask(rawQuery: string, w: Wallet, extraContext = ""): Promise<AnswerResult> {
   const cleaned = deidentify(rawQuery);
+  const cleanedExtra = deidentify(extraContext);
   const tags = kAnonymityGuard(deriveTags(w));
   const API = apiBase();
 
@@ -46,7 +47,7 @@ export async function ask(rawQuery: string, w: Wallet, extraContext = ""): Promi
         tags,
         region: w.region,
         language: w.language,
-        extraContext,
+        extraContext: cleanedExtra,
       }),
       signal: ctrl.signal,
     });

@@ -153,7 +153,7 @@ function AdminDashboard({ token, email, onLogout }) {
   const [date, setDate] = useState('')
   const [text, setText] = useState('')
   const [file, setFile] = useState(null)
-  const [region, setRegion] = useState('bavaria')
+  const [region, setRegion] = useState('München')
   const [lang, setLang] = useState('en')
   const [apiUrl, setApiUrl] = useState(
     'https://cms.integreat-app.de/testumgebung-frag-integreat/de/wp-json/extensions/v3/pages/',

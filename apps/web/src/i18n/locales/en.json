@@ -553,9 +553,9 @@
       "description": "We'll match your answers against typical Ausländeramt requirements and show what to bring."
     },
     "bubble": {
-      "flowSubtitle": "Tap a bubble. The next node appears from your answer.",
+      "flowSubtitle": "Follow the path left to right. Each answer creates the next bubble.",
       "reset": "Reset",
-      "liveNode": "New bubble",
+      "liveNode": "Current node",
       "continue": "Continue",
       "clearSelection": "Clear selection",
       "recommended": "Good match",

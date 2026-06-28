@@ -1,6 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   ArrowLeft,
+  ArrowRight,
   BadgeCheck,
   BriefcaseBusiness,
   Check,
@@ -105,10 +106,6 @@ function toneFor(tone) {
   return TONES[tone] ?? TONES.sky
 }
 
-function pathSide(index) {
-  return index % 2 === 0 ? 'justify-start pr-6 sm:pr-20' : 'justify-end pl-6 sm:pl-20'
-}
-
 function selectedClass(selected) {
   return selected
     ? 'border-charcoal bg-charcoal text-white shadow-md'
@@ -133,17 +130,27 @@ function optionProviderLabel(provider, t) {
   return t('auslander.bubble.aiOptions')
 }
 
-function TrailBubble({ item, index }) {
-  const side = pathSide(index)
+function FlowArrow() {
+  return (
+    <div className="flex w-16 shrink-0 items-center justify-center text-slate-300 sm:w-20">
+      <div className="h-px flex-1 bg-slate-200" />
+      <ArrowRight size={24} strokeWidth={1.8} aria-hidden="true" />
+    </div>
+  )
+}
 
+function TrailBubble({ item, index }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20, scale: 0.96 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
+      initial={{ opacity: 0, x: 28, scale: 0.96 }}
+      animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
       transition={{ duration: 0.28 }}
-      className={`relative z-10 flex ${side}`}
+      className="relative z-10 flex w-[min(78vw,24rem)] shrink-0"
     >
-      <div className="max-w-[min(100%,28rem)] rounded-[999px] border border-white/80 bg-white/95 px-7 py-5 shadow-[0_18px_42px_rgba(15,23,42,0.09)] ring-1 ring-slate-200/80">
+      <div className="flex min-h-44 w-full flex-col justify-center rounded-[2rem] border border-white/80 bg-white/95 px-6 py-5 shadow-[0_18px_42px_rgba(15,23,42,0.09)] ring-1 ring-slate-200/80">
+        <span className="mb-4 flex h-8 w-8 items-center justify-center rounded-full bg-charcoal text-xs font-black text-white">
+          {index + 1}
+        </span>
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
           {item.question}
         </p>
@@ -238,7 +245,7 @@ function ActiveBubble({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -12, scale: 0.98 }}
       transition={{ duration: 0.3 }}
-      className={`relative z-20 mx-auto w-full max-w-3xl rounded-[3rem] border p-5 shadow-[0_24px_70px_rgba(15,23,42,0.12)] sm:p-6 ${style.active}`}
+      className={`relative z-20 w-[min(86vw,34rem)] shrink-0 rounded-[2.5rem] border p-5 shadow-[0_24px_70px_rgba(15,23,42,0.12)] sm:p-6 ${style.active}`}
       aria-live="polite"
     >
       <div className="flex items-start gap-4">
@@ -267,7 +274,7 @@ function ActiveBubble({
       )}
 
       {node.type === 'single' && (
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="mt-6 grid gap-3">
           {optionsLoading && (
             <div className="col-span-full flex min-h-28 items-center justify-center rounded-full border border-dashed border-slate-300 bg-white/70 text-sm font-semibold text-slate-500">
               <Loader2 size={18} className="mr-2 animate-spin" aria-hidden="true" />
@@ -294,7 +301,7 @@ function ActiveBubble({
 
       {node.type === 'multi' && (
         <>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          <div className="mt-6 grid max-h-[22rem] gap-3 overflow-y-auto pr-1">
             {optionsLoading && (
               <div className="col-span-full flex min-h-28 items-center justify-center rounded-full border border-dashed border-slate-300 bg-white/70 text-sm font-semibold text-slate-500">
                 <Loader2 size={18} className="mr-2 animate-spin" aria-hidden="true" />
@@ -535,6 +542,7 @@ export function GuidedInterviewFlow() {
     loading,
   } = useGuidedInterview()
   const panelRef = useRef(null)
+  const railRef = useRef(null)
   const [dynamicOptions, setDynamicOptions] = useState([])
   const [optionsLoading, setOptionsLoading] = useState(false)
   const [optionMeta, setOptionMeta] = useState(null)
@@ -546,11 +554,25 @@ export function GuidedInterviewFlow() {
   const isResult = activeBubble?.id === GUIDED_FLOW_RESULT_ID || activeBubble?.type === 'result'
 
   useEffect(() => {
+    const rail = railRef.current
+    if (!rail) return
+    requestAnimationFrame(() => {
+      rail.scrollTo({ left: rail.scrollWidth, behavior: 'smooth' })
+    })
+  }, [activeBubble?.id, bubblePath.length, isResult])
+
+  useEffect(() => {
     let cancelled = false
     async function loadOptions() {
       if (!activeBubble || activeBubble.type === 'number' || activeBubble.type === 'result') {
         setDynamicOptions([])
         setOptionMeta(null)
+        return
+      }
+      if (!activeBubble.requiresAiOptions) {
+        setDynamicOptions(getGuidedNodeOptions(activeBubble, answers))
+        setOptionMeta({ provider: 'local-structure' })
+        setOptionsLoading(false)
         return
       }
       setOptionsLoading(true)
@@ -621,8 +643,8 @@ export function GuidedInterviewFlow() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-1 sm:px-2">
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="w-full max-w-none">
+      <div className="mb-5 flex flex-col gap-3 px-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -666,26 +688,24 @@ export function GuidedInterviewFlow() {
       <div
         ref={panelRef}
         tabIndex={-1}
-        className="relative min-h-[68vh] overflow-hidden rounded-[2.25rem] bg-[#f7faf9] px-4 py-6 outline-none ring-1 ring-slate-200 sm:px-6 sm:py-8"
+        className="relative min-h-[72vh] overflow-hidden bg-[#f7faf9] py-5 outline-none ring-1 ring-slate-200 sm:py-7"
       >
-        <div className="pointer-events-none absolute left-1/2 top-8 h-[calc(100%-4rem)] w-px -translate-x-1/2 bg-[repeating-linear-gradient(to_bottom,rgba(56,189,248,0.42)_0,rgba(56,189,248,0.42)_10px,transparent_10px,transparent_22px)]" />
-        <div className="relative space-y-5 sm:space-y-6">
-          <AnimatePresence initial={false}>
-            {bubblePath.map((item, index) => (
-              <TrailBubble key={item.id} item={item} index={index} />
-            ))}
-          </AnimatePresence>
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-slate-200/70" />
+        <div
+          ref={railRef}
+          className="relative overflow-x-auto overscroll-x-contain px-4 pb-4 pt-2 sm:px-8"
+        >
+          <div className="flex min-w-max items-center py-8">
+            <AnimatePresence initial={false}>
+              {bubblePath.map((item, index) => (
+                <div key={item.id} className="flex items-center">
+                  <TrailBubble item={item} index={index} />
+                  {(index < bubblePath.length - 1 || !isResult) && <FlowArrow />}
+                </div>
+              ))}
+            </AnimatePresence>
 
-          <AnimatePresence mode="wait">
-            {isResult ? (
-              <ResultBubble
-                path={bubblePath}
-                advice={guidedAdvice}
-                loading={loading}
-                onGenerate={generateGuidedAdvice}
-                t={t}
-              />
-            ) : (
+            {!isResult && (
               <ActiveBubble
                 node={activeBubble}
                 answers={answers}
@@ -697,8 +717,20 @@ export function GuidedInterviewFlow() {
                 t={t}
               />
             )}
-          </AnimatePresence>
+          </div>
         </div>
+
+        {isResult && (
+          <div className="relative px-4 pb-6 sm:px-8">
+            <ResultBubble
+              path={bubblePath}
+              advice={guidedAdvice}
+              loading={loading}
+              onGenerate={generateGuidedAdvice}
+              t={t}
+            />
+          </div>
+        )}
       </div>
     </div>
   )

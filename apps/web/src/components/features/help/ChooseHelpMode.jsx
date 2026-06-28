@@ -8,7 +8,7 @@ export function ChooseHelpMode() {
   const { startInterview, showAssistant, loading } = useGuidedInterview()
 
   return (
-    <div className="mx-auto w-full max-w-lg">
+    <div className="mx-auto w-full max-w-lg px-4 sm:px-0">
       <h1 className="text-center text-xl font-bold text-charcoal sm:text-2xl">
         {t('help.choose.title')}
       </h1>
@@ -66,14 +66,6 @@ export function ChooseHelpMode() {
         </article>
       </div>
 
-      <button
-        type="button"
-        onClick={showAssistant}
-        className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200/60 bg-white/70 px-4 py-3 text-sm text-slate-600 backdrop-blur-sm transition-colors hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-civic-purple"
-      >
-        <span aria-hidden="true">💡</span>
-        {t('help.choose.tip')}
-      </button>
     </div>
   )
 }

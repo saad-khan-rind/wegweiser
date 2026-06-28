@@ -553,9 +553,9 @@
       "description": "Wir gleichen Ihre Antworten mit typischen Ausländeramt-Anforderungen ab."
     },
     "bubble": {
-      "flowSubtitle": "Tippe eine Bubble an. Der naechste Knoten entsteht aus deiner Antwort.",
+      "flowSubtitle": "Folge dem Pfad von links nach rechts. Jede Antwort erzeugt die naechste Bubble.",
       "reset": "Zuruecksetzen",
-      "liveNode": "Neue Bubble",
+      "liveNode": "Aktueller Knoten",
       "continue": "Weiter",
       "clearSelection": "Auswahl leeren",
       "recommended": "Gute Wahl",

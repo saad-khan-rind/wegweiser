@@ -93,7 +93,7 @@ function AssistantWorkspaceContent() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-3xl">
+    <div className="mx-auto w-full max-w-3xl px-4 sm:px-0">
       <div className="mb-4 flex items-center justify-between gap-2">
         <button
           type="button"

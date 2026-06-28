@@ -24,7 +24,7 @@ services:
       # Always-latest crawl on boot + every 6h:
       - CRAWL_ON_START=1
       - CRAWL_INTERVAL_MIN=360
-      - CRAWL_REGION=augsburg
+      - CRAWL_REGION=München
       - CRAWL_LANG=de
     depends_on: [ollama]
 
@@ -37,6 +37,10 @@ services:
       - AI_SERVICE_URL=http://ai:3002
       - AGENT_TIMEOUT_MS=200000
       - ADMIN_TOKEN=${ADMIN_TOKEN:-change-me}
+      # Single admin user for the new frontend's /admin login (CHANGE THESE):
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@wegweiser.local}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-ChangeMe!Strong-Passw0rd}
+      - ADMIN_JWT_SECRET=${ADMIN_JWT_SECRET:-please-change-this-signing-secret}
     depends_on: [ai]
 
   web:

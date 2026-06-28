@@ -78,7 +78,7 @@ docker run -d --name ai --network wegweiser \
   -e EMBED_MODEL=nomic-embed-text \
   -e EMBED_PROVIDER=hash \
   -e AGENT_USE_WEB=1 \
-  -e CRAWL_ON_START=1 -e CRAWL_REGION=bavaria -e CRAWL_LANG=en \
+  -e CRAWL_ON_START=1 -e CRAWL_REGION=München -e CRAWL_LANG=en \
   -e PINECONE_API_KEY="${PINECONE_API_KEY:-}" \
   wegweiser-ai
 
@@ -162,3 +162,32 @@ Pinecone index or use a fresh `PINECONE_INDEX` before demoing.
 `llama3.1:8b` on CPU is slow and the agent makes a couple of LLM calls
 (draft + self-verify). Expect 20–90s per answer. To speed up: use a smaller model
 (`OLLAMA_MODEL=llama3.2:3b`), set `AGENT_MAX_ITERS=0`, or `AGENT_USE_WEB=0`.
+
+---
+
+## Admin login (new React frontend)
+
+The knowledge-base admin tools live at **`/admin`** (e.g. `http://<host>:4000/admin`).
+Access is gated by a single admin user whose credentials live **only in the API
+environment** — there is no user database.
+
+Set these on the `api` service (defaults are placeholders — change them):
+
+```
+ADMIN_EMAIL=admin@wegweiser.local
+ADMIN_PASSWORD=ChangeMe!Strong-Passw0rd
+ADMIN_JWT_SECRET=please-change-this-signing-secret   # signs login tokens
+```
+
+Flow:
+1. Open `/admin`, sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`.
+2. `POST /api/auth/login` returns a signed token (HMAC-SHA256, 12h expiry); the
+   frontend stores it in `sessionStorage` and sends it as
+   `Authorization: Bearer <token>` on every admin call. `GET /api/auth/me`
+   re-validates it on reload.
+3. Everything from the old admin page still works: system/vector-store health,
+   paste-text and file ingestion, the always-latest crawl (Bavaria/Integreat),
+   listing stored documents, and clearing the vector DB.
+
+The legacy `x-admin-token` header (`ADMIN_TOKEN`) still works for scripted
+ingestion, so existing automation is unaffected.

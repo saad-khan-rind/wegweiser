@@ -383,6 +383,7 @@ function ActiveBubble({
 function AdviceBubble({ card, index, cardCount }) {
   const Icon = ICONS[card.icon] ?? Sparkles
   const bodyText = card.content?.body || card.description
+  const isSummaryCard = card.category === 'summary' || card.id === 'overview'
   const staggerClass =
     cardCount > 2
       ? index % 2 === 0
@@ -402,9 +403,15 @@ function AdviceBubble({ card, index, cardCount }) {
           <Icon size={19} aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <h3 className="text-base font-black leading-tight text-charcoal">{card.title}</h3>
+          {!isSummaryCard && (
+            <h3 className="text-base font-black leading-tight text-charcoal">{card.title}</h3>
+          )}
           {bodyText && (
-            <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-slate-500">
+            <p
+              className={`whitespace-pre-line text-sm leading-relaxed text-slate-500 ${
+                isSummaryCard ? '' : 'mt-2'
+              }`}
+            >
               {bodyText}
             </p>
           )}
@@ -453,21 +460,7 @@ function AdviceBubble({ card, index, cardCount }) {
   )
 }
 
-function normalizeResultText(text) {
-  return String(text ?? '').replace(/\s+/g, ' ').trim().toLowerCase()
-}
-
-function isDuplicateIntro(intro, cards = []) {
-  const introText = normalizeResultText(intro)
-  if (!introText) return false
-  const firstCard = cards[0]
-  const firstCardText = normalizeResultText(firstCard?.content?.body || firstCard?.description)
-  return firstCardText === introText || firstCardText.startsWith(`${introText} `)
-}
-
 function ResultBubble({ path, advice, loading, onGenerate, t }) {
-  const showIntro = advice?.intro && !isDuplicateIntro(advice.intro, advice.cards)
-
   return (
     <motion.section
       key="result"
@@ -529,9 +522,6 @@ function ResultBubble({ path, advice, loading, onGenerate, t }) {
 
       {advice ? (
         <div className="mt-6">
-          {showIntro && (
-            <p className="mb-4 text-sm font-semibold text-charcoal">{advice.intro}</p>
-          )}
           <div className="grid items-stretch gap-4 lg:grid-cols-2">
             {(advice.cards ?? []).map((card, index, cards) => (
               <AdviceBubble

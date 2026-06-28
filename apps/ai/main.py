@@ -43,6 +43,7 @@ class AgentRequest(BaseModel):
     region: str = ""
     language: str = "en"
     extra_context: str = ""
+    clarifying_answers: dict[str, str] = {}
 
 
 class RetrieveRequest(BaseModel):
@@ -83,7 +84,7 @@ def health() -> dict:
 
 @app.post("/agent")
 def run_agent(req: AgentRequest) -> dict:
-    return agent.run(req.query, req.tags, req.region, _lang(req.language), req.extra_context)
+    return agent.run(req.query, req.tags, req.region, _lang(req.language), req.extra_context, req.clarifying_answers)
 
 
 @app.post("/retrieve")

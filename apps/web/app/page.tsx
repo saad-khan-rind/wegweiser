@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import { ask, apiConfigured, getHealth } from "@/lib/api";
-import type { AnswerResult, LangCode, Wallet } from "@/lib/types";
+import type { AnswerResult, ClarifyingQuestion, LangCode, Wallet } from "@/lib/types";
 import AnswerView from "@/components/AnswerView";
 
 type Status = { kind: "idle" | "ok" | "err" | "busy"; msg: string };
@@ -14,6 +14,7 @@ export default function Page() {
   const [lastQuery, setLastQuery] = useState("");
   const [extraContext, setExtraContext] = useState("");
   const [conversationContext, setConversationContext] = useState("");
+  const [clarifyingAnswers, setClarifyingAnswers] = useState<Record<string, string>>({});
   const [result, setResult] = useState<AnswerResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle", msg: "" });
@@ -36,21 +37,35 @@ export default function Page() {
   }), [language, region]);
 
   async function runAsk(extra = "") {
-    if (!query.trim()) return;
+    const waitingForDetail = Boolean(result?.needsInput && result.clarifyingQuestion);
+    const typedAsFollowUp = waitingForDetail && lastQuery && query.trim() && query.trim() !== lastQuery.trim();
+    const followUp = extra || (typedAsFollowUp ? query.trim() : "");
+    if (!query.trim() && !lastQuery) return;
     setLoading(true);
     setStatus({ kind: "busy", msg: "Checking sources and verifying the answer..." });
     setResult(null);
-    if (!extra) setLastQuery(query);
+    if (!followUp) setLastQuery(query);
     try {
-      const activeQuery = extra ? lastQuery || query : query;
-      const outgoingContext = [conversationContext, extra ? `User follow-up detail: ${extra}` : ""]
+      const activeQuery = followUp ? lastQuery || query : query;
+      const detailContext = followUp ? formatClarificationContext(result, followUp) : "";
+      const currentQuestion = result?.clarifyingQuestions?.find((q) => !clarifyingAnswers[q.id]) || result?.clarifyingQuestions?.[0];
+      const nextClarifyingAnswers = followUp && currentQuestion
+        ? { ...clarifyingAnswers, [currentQuestion.id]: followUp }
+        : clarifyingAnswers;
+      const outgoingContext = [conversationContext, detailContext]
         .filter(Boolean)
         .join("\n");
-      const r = await ask(activeQuery, wallet, outgoingContext);
+      const r = await ask(activeQuery, wallet, outgoingContext, nextClarifyingAnswers);
       setResult(r);
       setStatus({ kind: "ok", msg: r.needsInput ? "The assistant needs one detail before answering." : "Answer generated from available sources." });
       setExtraContext("");
+      if (followUp && lastQuery) setQuery(lastQuery);
+      if (followUp && currentQuestion) setClarifyingAnswers(nextClarifyingAnswers);
+      if (detailContext) {
+        setConversationContext((prev) => `${prev}\n${detailContext}`.trim().slice(-1800));
+      }
       if (!r.needsInput) {
+        setClarifyingAnswers({});
         const compactAnswer = (r.answer || "").replace(/\s+/g, " ").slice(0, 700);
         const nextContext = `${conversationContext}\nUser asked: ${activeQuery}\nAssistant answered: ${compactAnswer}`.trim();
         setConversationContext(nextContext.slice(-1800));
@@ -79,6 +94,8 @@ export default function Page() {
   if (!mounted) return <div className="min-h-[100dvh]" />;
 
   const clarifying = Boolean(result?.needsInput && result.clarifyingQuestion);
+  const openClarifyingQuestions = (result?.clarifyingQuestions ?? []).filter((q) => !clarifyingAnswers[q.id]);
+  const visibleClarifyingQuestions = openClarifyingQuestions.length ? openClarifyingQuestions.slice(0, 1) : (result?.clarifyingQuestions ?? []).slice(0, 1);
 
   return (
     <main className="min-h-[100dvh] px-5 py-6">
@@ -163,17 +180,22 @@ export default function Page() {
         {clarifying && (
           <section className="card mt-4 px-4 py-4">
             <div className="font-mono text-[11px] uppercase tracking-wide text-muted">Clarifying question</div>
-            {result?.clarifyingQuestions?.length ? (
+            {visibleClarifyingQuestions.length ? (
               <div className="mt-2 space-y-3">
-                {result.clarifyingQuestions.map((q) => (
+                {visibleClarifyingQuestions.map((q) => (
                   <div key={q.id} className="rounded-xl border border-line bg-paper px-3 py-2">
                     <p className="text-[14px] font-medium text-ink">{q.question}</p>
                     {q.options?.length ? (
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {q.options.map((option) => (
-                          <span key={option.value} className="rounded-full border border-line px-2 py-1 text-[12px] text-muted">
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => setExtraContext(formatClarificationChoice(q, option.label))}
+                            className="rounded-full border border-line px-2 py-1 text-[12px] text-muted transition hover:border-ink hover:text-ink"
+                          >
                             {option.label}
-                          </span>
+                          </button>
                         ))}
                       </div>
                     ) : null}
@@ -217,6 +239,15 @@ export default function Page() {
       </div>
     </main>
   );
+}
+
+function formatClarificationChoice(question: ClarifyingQuestion, label: string): string {
+  return `${question.question}: ${label}`;
+}
+
+function formatClarificationContext(result: AnswerResult | null, answer: string): string {
+  const question = result?.clarifyingQuestion || result?.clarifyingQuestions?.[0]?.question || "Clarifying detail";
+  return `Answer to clarifying question "${question}": ${answer}`;
 }
 
 function Field({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {

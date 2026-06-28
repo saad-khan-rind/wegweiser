@@ -9,6 +9,7 @@ export interface ChatRequest {
   region?: string;
   language?: string;
   extraContext?: string;
+  clarifyingAnswers?: Record<string, string>;
 }
 
 export interface Source {
@@ -61,10 +62,11 @@ export class ChatService {
     const query = deidentify(req.query ?? "");
     const tags = sanitizeTags(req.tags);
     const extra = deidentify(req.extraContext ?? "");
+    const clarifyingAnswers = sanitizeClarifyingAnswers(req.clarifyingAnswers);
     const language = detectLanguage(query, req.language);
 
     // Preferred path: the agentic, self-verifying RAG service.
-    const agent = await this.callAgent(query, tags, req.region, language, extra);
+    const agent = await this.callAgent(query, tags, req.region, language, extra, clarifyingAnswers);
     if (agent) return { ...agent, deidentifiedQuery: query };
 
     // Fallback path: local retrieve + compose (keeps the demo alive if the
@@ -83,6 +85,7 @@ export class ChatService {
     region = "",
     language = "en",
     extraContext = "",
+    clarifyingAnswers: Record<string, string> = {},
   ): Promise<ChatResponse | null> {
     const ai = process.env.AI_SERVICE_URL?.replace(/\/$/, "");
     if (!ai) return null;
@@ -94,7 +97,7 @@ export class ChatService {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          query, tags, region, language, extra_context: extraContext,
+          query, tags, region, language, extra_context: extraContext, clarifying_answers: clarifyingAnswers,
         }),
         signal: ctrl.signal,
       });
@@ -262,6 +265,18 @@ function ensureSummary(answer: string, language: "en" | "de"): string {
   const text = (answer || "").trim();
   if (/^(summary|zusammenfassung)\b/i.test(text)) return text;
   return `${language === "de" ? "Zusammenfassung" : "Summary"}\n${text}`;
+}
+
+function sanitizeClarifyingAnswers(input: unknown): Record<string, string> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return {};
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (typeof value !== "string") continue;
+    const cleanKey = key.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80);
+    const cleanValue = deidentify(value).slice(0, 240);
+    if (cleanKey && cleanValue) out[cleanKey] = cleanValue;
+  }
+  return out;
 }
 
 function registrationFallback(query: string, language: "en" | "de"): string {

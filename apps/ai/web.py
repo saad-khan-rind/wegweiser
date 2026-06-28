@@ -71,6 +71,48 @@ DIRECT_TOPICS = {
             ),
         },
     ],
+    "student_visa": [
+        {
+            "id": "official-aufenthg-16b",
+            "title": "Residence Act section 16b - Studies",
+            "url": "https://www.gesetze-im-internet.de/englisch_aufenthg/englisch_aufenthg.html#p0274",
+            "snippet": (
+                "A residence title for study purposes can be granted for full-time study at a state or "
+                "state-recognised higher education institution, including preparatory measures. Admission "
+                "to the course and secure livelihood are key points checked by the authorities."
+            ),
+        },
+        {
+            "id": "official-foreign-office-national-visa",
+            "title": "Federal Foreign Office - National visa",
+            "url": "https://www.auswaertiges-amt.de/en/visa-service/visa-navigator",
+            "snippet": (
+                "For stays in Germany longer than 90 days, applicants usually need a national visa before "
+                "entering Germany. The application is made through the responsible German mission abroad."
+            ),
+        },
+    ],
+    "post_study": [
+        {
+            "id": "official-aufenthg-20",
+            "title": "Residence Act section 20 - Job seeking after studies",
+            "url": "https://www.gesetze-im-internet.de/englisch_aufenthg/englisch_aufenthg.html#p0418",
+            "snippet": (
+                "After successfully completing studies in Germany, a residence permit can be issued for "
+                "up to 18 months to look for employment for which the qualification qualifies the graduate. "
+                "Employment is permitted during this job-search residence permit."
+            ),
+        },
+        {
+            "id": "official-make-it-post-study",
+            "title": "Make it in Germany - Prospects after graduation",
+            "url": "https://www.make-it-in-germany.com/en/study-vocational-training/studies-in-germany/prospects-after",
+            "snippet": (
+                "International graduates can look for a qualified job in Germany after graduation and then "
+                "switch to a suitable residence title such as qualified employment or the EU Blue Card."
+            ),
+        },
+    ],
 }
 
 
@@ -103,6 +145,10 @@ def _topic(query: str) -> str:
     q = (query or "").lower().replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
     if re.search(r"\b(registration|register|address|anmeldung|anmelden|melde|wohnsitz)\b", q):
         return "registration"
+    if re.search(r"\b(after studies|after graduation|post study|post-study|nach dem studium|studienabschluss|graduation)\b", q):
+        return "post_study"
+    if re.search(r"\b(student visa|study visa|visa for stud|national visa.*stud|studium.*visum|studentenvisum)\b", q):
+        return "student_visa"
     return ""
 
 

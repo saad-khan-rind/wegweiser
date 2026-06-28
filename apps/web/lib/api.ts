@@ -27,7 +27,7 @@ function timeoutMs(): number {
   return 200000;
 }
 
-export async function ask(rawQuery: string, w: Wallet, extraContext = ""): Promise<AnswerResult> {
+export async function ask(rawQuery: string, w: Wallet, extraContext = "", clarifyingAnswers: Record<string, string> = {}): Promise<AnswerResult> {
   const cleaned = deidentify(rawQuery);
   const cleanedExtra = deidentify(extraContext);
   const tags = kAnonymityGuard(deriveTags(w));
@@ -48,6 +48,7 @@ export async function ask(rawQuery: string, w: Wallet, extraContext = ""): Promi
         region: w.region,
         language: w.language,
         extraContext: cleanedExtra,
+        clarifyingAnswers,
       }),
       signal: ctrl.signal,
     });

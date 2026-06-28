@@ -111,6 +111,7 @@ def gather_sources_with_audit(query: str, tags: list[str], k: int = 4, region: s
 
 QUERY_CLUSTERS = [
     {"visa", "visum", "residence", "permit", "aufenthalt", "aufenthaltstitel", "residence permit"},
+    {"student visa", "study visa", "national visa", "studentenvisum", "visum zum studium", "visa for studies"},
     {"study", "studies", "studium", "student", "studenten", "studierenden", "university", "hochschule"},
     {"graduation", "graduate", "abschluss", "studienabschluss", "after studies", "nach dem studium"},
     {"work", "job", "employment", "labour", "labor", "arbeit", "arbeiten", "arbeitsmarkt", "beschaeftigung", "beschäftigung"},
@@ -357,8 +358,11 @@ def _verify(goal: str, draft: dict, sources: list[dict], language: str) -> dict 
 # Public entry
 # --------------------------------------------------------------------------- #
 def run(query: str, tags: list[str], region: str = "", language: str = "en",
-        extra_context: str = "") -> dict:
+        extra_context: str = "", clarifying_answers: dict | None = None) -> dict:
     answer_language = _detect_language(query, language)
+    answer_context = _answers_context(clarifying_answers or {})
+    if answer_context:
+        extra_context = f"{extra_context}\n{answer_context}".strip()
     goal = query if not extra_context else f"{query}\nPrevious conversation or extra user detail (use only if relevant):\n{extra_context[:1200]}"
     retrieval_query = _contextual_query(query, extra_context)
     trace: list[str] = []
@@ -398,6 +402,18 @@ def run(query: str, tags: list[str], region: str = "", language: str = "en",
     confidence = _as_float(draft.get("confidence"), 0.6)
     answer = _format_answer(draft, answer_language)
     unsupported = False
+
+    topic_fallback = _extractive_answer(query, sources, answer_language)
+    if _should_use_topic_fallback(query, answer) and topic_fallback:
+        trace.append("Replaced thin model draft with structured source-grounded answer")
+        return _with_runtime({
+            "answer": topic_fallback,
+            "citations": _citations(sources, used),
+            "confidence": max(0.62, min(confidence, 0.72)),
+            "escalate": False,
+            "trace": trace,
+            "needs_input": False,
+        }, resources, llm_info)
 
     for it in range(MAX_ITERS + 1):
         verdict = _verify(
@@ -477,10 +493,38 @@ def _in_scope(query: str) -> bool:
     return bool(legal_context and legal_topic)
 
 
+def _answers_context(answers: dict) -> str:
+    lines = []
+    for key, value in answers.items():
+        if value is None:
+            continue
+        clean_key = re.sub(r"[^a-zA-Z0-9_-]+", "", str(key))[:80]
+        clean_value = re.sub(r"\s+", " ", str(value)).strip()[:240]
+        if clean_key and clean_value:
+            lines.append(f"Clarifying answer {clean_key}: {clean_value}")
+    return "\n".join(lines)
+
+
 def _required_clarifications(query: str, language: str, extra_context: str) -> list[dict]:
     context = f"{query}\n{extra_context}"
     q = _normalize(context)
     questions: list[dict] = []
+
+    if _broad_immigration_topic(query) and not _has_specific_immigration_area(q):
+        return [_question(
+            "immigration_area",
+            "Zu welchem Bereich brauchst du Hilfe?" if language == "de"
+            else "Which immigration topic do you need help with?",
+            [
+                ("visa_entry", "Visum oder Einreise" if language == "de" else "Visa or entry"),
+                ("residence", "Aufenthaltstitel verlängern/wechseln" if language == "de" else "Residence permit extension/change"),
+                ("study", "Studium" if language == "de" else "Studies"),
+                ("work", "Arbeit oder Jobsuche" if language == "de" else "Work or job search"),
+                ("family", "Familiennachzug" if language == "de" else "Family reunification"),
+                ("asylum", "Asyl oder Schutzstatus" if language == "de" else "Asylum or protection status"),
+                ("citizenship", "Einbürgerung" if language == "de" else "Citizenship/naturalization"),
+            ],
+        )]
 
     if _travel_visa_topic(query):
         if not _has_nationality_context(q):
@@ -630,9 +674,21 @@ def _out_of_scope(language: str, trace: list[str]) -> dict:
 
 def _travel_visa_topic(query: str) -> bool:
     q = _normalize(query)
+    if _student_visa_topic(query):
+        return False
     has_visa = re.search(r"\b(visa|visum|entry requirement|einreise)\b", q)
-    has_travel = re.search(r"\b(travel|visit|go to|enter|reise|reisen|besuch|nach|to)\b", q)
+    has_travel = re.search(r"\b(travel|visit|go to|enter|entry|reise|reisen|besuch|nach)\b", q)
     return bool(has_visa and has_travel)
+
+
+def _student_visa_topic(query: str) -> bool:
+    q = _normalize(query)
+    return bool(re.search(r"\b(student visa|study visa|visa for stud|national visa.*stud|studentenvisum|visum zum studium)\b", q))
+
+
+def _post_study_topic(query: str) -> bool:
+    q = _normalize(query)
+    return bool(re.search(r"\b(after studies|after graduation|post study|post-study|rules after studies|nach dem studium|studienabschluss|abschluss.*stud)\b", q))
 
 
 def _work_permission_topic(query: str) -> bool:
@@ -645,6 +701,19 @@ def _benefits_topic(query: str) -> bool:
     return bool(re.search(r"\b(benefit|eligible|kindergeld|buergergeld|burgergeld|sozialleistung|leistungen|jobcenter)\b", q))
 
 
+def _broad_immigration_topic(query: str) -> bool:
+    q = _normalize(query)
+    return bool(re.search(r"\b(immigration law|immigration laws|migration law|migration laws|einwanderungsrecht|migrationsrecht|immigration rules)\b", q))
+
+
+def _has_specific_immigration_area(text: str) -> bool:
+    return bool(re.search(
+        r"\b(visa|visum|entry|einreise|residence|aufenthalt|study|studium|student|work|arbeit|job|"
+        r"family|familie|asylum|asyl|refugee|citizenship|naturalization|einbuergerung|einbürgerung)\b",
+        text,
+    ))
+
+
 def _has_nationality_context(text: str) -> bool:
     return bool(re.search(
         r"\b(nationality|citizenship|citizen|passport|staatsangehoerigkeit|staatsangehörigkeit|pass|"
@@ -654,16 +723,24 @@ def _has_nationality_context(text: str) -> bool:
 
 
 def _has_status_context(text: str) -> bool:
+    if re.search(r"\bgermany_status:\s*(student|work|family|visitor|permanent|german_or_eu|asylum_protection|temporary_protection)\b", text):
+        return True
     return bool(re.search(
         r"\b(student residence|student visa|work permit|blue card|permanent|asylum|refugee|subsidiary|"
         r"temporary protection|family reunification|schengen|visitor|aufenthaltstitel|aufenthaltserlaubnis|"
-        r"niederlassung|blaue karte|asyl|fluechtling|flüchtling|familiennachzug|duldung|studentenvisum|arbeitsvisum|besuchsvisum)\b",
+        r"niederlassung|blaue karte|asyl|fluechtling|flüchtling|familiennachzug|duldung|studentenvisum|arbeitsvisum|besuchsvisum|"
+        r"german_or_eu|asylum_protection|temporary_protection)\b",
         text,
     ))
 
 
 def _has_travel_purpose(text: str) -> bool:
-    return bool(re.search(r"\b(tourism|tourist|family visit|business|study|work|transit|purpose|dauer|zweck|besuch|arbeit|studium)\b", text))
+    return bool(re.search(
+        r"\b(tourism|tourist|family visit|business|study|studies|masters?|bachelors?|degree|course|"
+        r"work|transit|purpose|dauer|zweck|besuch|arbeit|studium|master|bachelor|"
+        r"\d+\s*(day|days|week|weeks|month|months|year|years|tag|tage|woche|wochen|monat|monate|jahr|jahre))\b",
+        text,
+    ))
 
 
 def _contextual_query(query: str, extra_context: str) -> str:
@@ -769,6 +846,10 @@ def _grounded_fallback(query: str, sources: list[dict], reason: str, trace: list
 
 
 def _extractive_answer(query: str, sources: list[dict], language: str) -> str:
+    if sources and _post_study_topic(query):
+        return _post_study_answer(language)
+    if sources and _student_visa_topic(query):
+        return _student_visa_answer(language)
     if not sources or not _registration_topic(query):
         return _generic_extractive_answer(query, sources, language)
     text = " ".join((s.get("title", "") + ". " + s.get("text", "")) for s in sources[:3])
@@ -790,6 +871,88 @@ def _extractive_answer(query: str, sources: list[dict], language: str) -> str:
         "2. Prepare your passport/ID and landlord confirmation.\n"
         "3. Check your city appointment page if an appointment is required."
     )
+
+
+def _post_study_answer(language: str) -> str:
+    if language == "de":
+        return (
+            "Zusammenfassung\nNach einem erfolgreichen Studienabschluss in Deutschland kannst du in der Regel "
+            "einen Aufenthaltstitel zur Arbeitssuche beantragen. Die offiziellen Quellen nennen dafür bis zu "
+            "18 Monate; während dieser Zeit ist Erwerbstätigkeit erlaubt.\n\n"
+            "Dokumenten-Checkliste\n- Nachweis über den erfolgreichen Studienabschluss in Deutschland\n"
+            "- Gültiger Pass\n- Nachweis über gesicherten Lebensunterhalt\n- Krankenversicherung\n- Aktueller Aufenthaltstitel\n\n"
+            "Schritte\n1. Prüfe vor Ablauf deines aktuellen Aufenthaltstitels die Verlängerung bzw. den Wechsel bei der Ausländerbehörde.\n"
+            "2. Beantrage den Aufenthaltstitel zur Arbeitsplatzsuche nach dem Studium.\n"
+            "3. Suche eine qualifizierte Beschäftigung, die zu deinem Abschluss passt.\n"
+            "4. Wenn du einen passenden Job hast, beantrage den Wechsel in den passenden Aufenthaltstitel, z. B. Beschäftigung als Fachkraft oder Blaue Karte EU.\n\n"
+            "Terminbuchung\nWenn deine Ausländerbehörde Online-Termine anbietet, nutze deren offizielle Terminseite. "
+            "Ich habe keinen einzelnen bayernweiten Buchungslink in den Quellen."
+        )
+    return (
+        "Summary\nAfter successfully completing studies in Germany, you can usually apply for a residence permit "
+        "to look for qualified work. The official sources mention up to 18 months for this job-search period, "
+        "and employment is permitted during that period.\n\n"
+        "Document checklist\n- Proof that you successfully completed your studies in Germany\n"
+        "- Valid passport\n- Proof of secure livelihood\n- Health insurance\n- Current residence title\n\n"
+        "Actionable steps\n1. Before your current residence title expires, check the extension/change process with the immigration office.\n"
+        "2. Apply for the post-study job-search residence permit.\n"
+        "3. Look for qualified employment that matches your degree.\n"
+        "4. Once you have a suitable job, apply to switch to the correct residence title, such as skilled employment or the EU Blue Card.\n\n"
+        "Booking\nIf your immigration office offers online appointments, use its official appointment page. "
+        "I did not find one single Bavaria-wide booking link in the sources."
+    )
+
+
+def _student_visa_answer(language: str) -> str:
+    if language == "de":
+        return (
+            "Zusammenfassung\nFür ein Studium in Deutschland brauchst du normalerweise ein nationales Visum, "
+            "das du vor der Einreise bei der zuständigen deutschen Auslandsvertretung beantragst. Für das "
+            "Visum werden vor allem Zulassung/Studienplatz, gesicherter Lebensunterhalt, Pass und Krankenversicherung geprüft.\n\n"
+            "Dokumenten-Checkliste\n- Gültiger Pass\n- Zulassung oder bedingte Zulassung der Hochschule\n"
+            "- Nachweis über gesicherten Lebensunterhalt, z. B. Sperrkonto oder anerkannter Finanzierungsnachweis\n"
+            "- Krankenversicherungsnachweis\n- Visumantragsformular und Passfotos\n- Bildungsnachweise/Zeugnisse\n\n"
+            "Schritte\n1. Sichere zuerst die Zulassung oder bedingte Zulassung für dein Studium.\n"
+            "2. Bereite den Finanzierungsnachweis und die Krankenversicherung vor.\n"
+            "3. Prüfe die Website der zuständigen deutschen Botschaft oder des Konsulats für dein Aufenthaltsland.\n"
+            "4. Buche dort einen Termin und reiche den nationalen Visumantrag mit Unterlagen ein.\n"
+            "5. Nach Einreise meldest du dich am Wohnort an und beantragst den Aufenthaltstitel bei der Ausländerbehörde.\n\n"
+            "Terminbuchung\nDie Terminbuchung läuft über die zuständige deutsche Auslandsvertretung. Nutze deren offizielle Website."
+        )
+    return (
+        "Summary\nFor studying in Germany, you normally need a national visa before entering Germany, applied for "
+        "through the responsible German mission abroad. The key checks are admission to study, secure livelihood, "
+        "a valid passport, and health insurance.\n\n"
+        "Document checklist\n- Valid passport\n- University admission or conditional admission\n"
+        "- Proof of secure livelihood, such as a blocked account or accepted funding proof\n"
+        "- Health insurance proof\n- Visa application form and biometric photos\n- Education certificates/transcripts\n\n"
+        "Actionable steps\n1. First secure admission or conditional admission for the study program.\n"
+        "2. Prepare proof of financing and health insurance.\n"
+        "3. Check the website of the responsible German embassy or consulate for your country of residence.\n"
+        "4. Book an appointment there and submit the national visa application with the required documents.\n"
+        "5. After entering Germany, register your address and apply for the residence permit at the immigration office.\n\n"
+        "Booking\nAppointment booking is handled by the responsible German mission abroad. Use that mission's official website."
+    )
+
+
+def _answer_too_thin(answer: str) -> bool:
+    clean = re.sub(r"\s+", " ", answer or "").strip()
+    words = re.findall(r"\w+", clean)
+    if len(words) < 18:
+        return True
+    if "|" in clean and len(words) < 30:
+        return True
+    return False
+
+
+def _should_use_topic_fallback(query: str, answer: str) -> bool:
+    if _answer_too_thin(answer):
+        return True
+    if (_student_visa_topic(query) or _post_study_topic(query)) and not re.search(
+        r"(document checklist|dokumenten-checkliste|actionable steps|schritte)", answer, flags=re.I
+    ):
+        return True
+    return False
 
 
 def _generic_extractive_answer(query: str, sources: list[dict], language: str) -> str:

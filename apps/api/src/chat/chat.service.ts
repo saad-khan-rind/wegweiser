@@ -22,6 +22,14 @@ export interface Source {
   excerpt?: string;
 }
 
+export interface ClarifyingQuestion {
+  id: string;
+  question: string;
+  required: boolean;
+  type: string;
+  options: { value: string; label: string }[];
+}
+
 export interface ChatResponse {
   answer: string;
   cards: { kind: string; title: string; body?: string; meta?: string }[];
@@ -32,6 +40,7 @@ export interface ChatResponse {
   provider: string;
   model?: string;
   clarifyingQuestion?: string;
+  clarifyingQuestions?: ClarifyingQuestion[];
   needsInput?: boolean;
   trace?: string[];
   resourcesConsidered?: Source[];
@@ -112,6 +121,17 @@ export class ChatService {
         accepted: Boolean(r.accepted),
         excerpt: r.excerpt ?? "",
       }));
+      const clarifyingQuestions: ClarifyingQuestion[] = Array.isArray(d.clarifying_questions)
+        ? d.clarifying_questions.map((q: any) => ({
+            id: String(q.id ?? ""),
+            question: String(q.question ?? ""),
+            required: Boolean(q.required ?? true),
+            type: String(q.type ?? "single_choice"),
+            options: Array.isArray(q.options)
+              ? q.options.map((o: any) => ({ value: String(o.value ?? ""), label: String(o.label ?? "") }))
+              : [],
+          })).filter((q: ClarifyingQuestion) => q.id && q.question)
+        : [];
       return {
         answer: d.answer ?? "",
         cards: this.cardsFor(Boolean(d.escalate), language === "de" ? "de" : "en"),
@@ -121,7 +141,8 @@ export class ChatService {
         deidentifiedQuery: query,
         provider: d.provider ?? "agent",
         model: d.model ?? "",
-        clarifyingQuestion: d.clarifying_question || undefined,
+        clarifyingQuestion: d.clarifying_question || clarifyingQuestions[0]?.question || undefined,
+        clarifyingQuestions,
         needsInput: Boolean(d.needs_input),
         trace: Array.isArray(d.trace) ? d.trace : undefined,
         resourcesConsidered,

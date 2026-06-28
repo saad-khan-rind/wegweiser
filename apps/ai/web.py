@@ -36,6 +36,19 @@ OFFICIAL_HOSTS = (
     "verwaltung.bund.de",
 )
 
+BLOCKED_PATTERNS = (
+    r"\bcaptcha\b",
+    r"\bradware\b",
+    r"\baccess denied\b",
+    r"\brequest unsuccessful\b",
+    r"\bincident id\b",
+    r"\bblocked due to security\b",
+    r"\bsolve this captcha\b",
+    r"\bunblock your request\b",
+    r"\bverify you are human\b",
+    r"\bcloudflare\b",
+)
+
 DIRECT_TOPICS = {
     "registration": [
         {
@@ -66,6 +79,7 @@ def search(query: str, k: int = 3) -> list[dict]:
     results = _ddg(query, max(k * 4, k))
     if os.getenv("AGENT_OFFICIAL_WEB_ONLY", "1") == "1":
         results = [r for r in results if is_official_url(r.get("url", ""))]
+    results = [r for r in results if not is_blocked_text(f"{r.get('title', '')} {r.get('snippet', '')}")]
     return results[:k]
 
 
@@ -95,6 +109,11 @@ def _topic(query: str) -> str:
 def is_official_url(url: str) -> bool:
     host = urlparse(url).netloc.lower().replace("www.", "")
     return any(host == h or host.endswith(h) for h in OFFICIAL_HOSTS)
+
+
+def is_blocked_text(text: str) -> bool:
+    compact = re.sub(r"\s+", " ", text or "").lower()
+    return any(re.search(pattern, compact, flags=re.I) for pattern in BLOCKED_PATTERNS)
 
 
 def _ddg(query: str, k: int) -> list[dict]:
@@ -129,6 +148,9 @@ def fetch(url: str, max_chars: int = 2500) -> str:
         text = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", html, flags=re.S | re.I)
         text = re.sub(r"<[^>]+>", " ", text)
         text = re.sub(r"\s+", " ", text).strip()
+        if is_blocked_text(text[:1200]):
+            log.info("Skipping blocked/captcha page: %s", url)
+            return ""
         return text[:max_chars]
     except Exception as e:  # noqa: BLE001
         log.warning("fetch failed for %s: %s", url, e)

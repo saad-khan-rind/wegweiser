@@ -122,6 +122,18 @@ QUERY_CLUSTERS = [
     {"language course", "integration course", "deutschkurs", "sprachkurs", "integrationskurs"},
 ]
 
+IN_SCOPE_TERMS = {
+    "immigration", "migration", "visa", "visum", "residence", "permit", "aufenthalt", "aufenthaltstitel",
+    "asylum", "asyl", "refugee", "flucht", "schutz", "naturalization", "citizenship", "einbuergerung",
+    "einbürgerung", "passport", "travel document", "blue card", "blaue karte", "registration", "anmeldung",
+    "melde", "buergeramt", "bürgeramt", "auslaender", "ausländer", "auslaenderbehoerde", "ausländerbehörde",
+    "jobcenter", "arbeitsagentur", "work permit", "arbeitserlaubnis", "labour market", "arbeitsmarkt",
+    "study", "studies", "student", "graduation", "after studies", "studium", "university", "hochschule", "school", "schule", "language course", "sprachkurs",
+    "integration", "integrationskurs", "health insurance", "krankenversicherung", "kindergeld",
+    "buergergeld", "bürgergeld", "benefit", "sozialleistung", "german law", "german policy",
+    "deutsches recht", "germany law", "travel to", "einreise", "entry requirement",
+}
+
 
 def _query_variants(query: str, language: str) -> list[dict]:
     other = "de" if language == "en" else "en"
@@ -274,11 +286,16 @@ def _dedupe(sources: list[dict]) -> list[dict]:
     seen, out = set(), []
     for s in sources:
         key = (s["title"].lower().strip(), s.get("url", ""))
-        if key in seen or not s.get("text"):
+        if key in seen or not s.get("text") or _blocked_source(s):
             continue
         seen.add(key)
         out.append(s)
     return out
+
+
+def _blocked_source(source: dict) -> bool:
+    text = f"{source.get('title', '')} {source.get('text', '')[:1200]}"
+    return web.is_blocked_text(text)
 
 
 # --------------------------------------------------------------------------- #
@@ -313,6 +330,7 @@ def _draft_system(language: str) -> str:
 
 VERIFY_SYS = (
     "You verify a draft answer against the sources, like a careful reviewer. Check every claim. "
+    "CAPTCHA, access-denied, security-block, or bot-check text is never a valid source and must be rejected. "
     "Decide the verdict: 'ok' if fully supported; 'needs_user_input' if answering correctly REQUIRES a "
     "user-specific fact that is missing (never assume it — ask); 'needs_more_context' if the sources are "
     "insufficient and a better search could help; 'unsupported' if the draft makes claims the sources don't back. "
@@ -344,9 +362,19 @@ def run(query: str, tags: list[str], region: str = "", language: str = "en",
     goal = query if not extra_context else f"{query}\nPrevious conversation or extra user detail (use only if relevant):\n{extra_context[:1200]}"
     retrieval_query = _contextual_query(query, extra_context)
     trace: list[str] = []
+    llm_info = llm.available()
+
+    if not _in_scope(query):
+        trace.append("Stopped before retrieval: question is outside Wegweiser scope")
+        return _with_runtime(_out_of_scope(answer_language, trace), [], llm_info)
+
+    missing_questions = _required_clarifications(query, answer_language, extra_context)
+    if missing_questions:
+        trace.append("Asked for missing user-specific facts before answering")
+        return _with_runtime(_clarification_payload(answer_language, missing_questions, trace), [], llm_info)
+
     sources, considered = gather_sources_with_audit(retrieval_query, tags, region=region, language=answer_language)
     resources = _resources(considered)
-    llm_info = llm.available()
     trace.append("Searched with English and German query variants")
     if extra_context:
         trace.append("Used previous conversation context for this follow-up")
@@ -404,6 +432,9 @@ def run(query: str, tags: list[str], region: str = "", language: str = "en",
 
         if verdict.get("corrected_answer"):
             answer = _ensure_summary(verdict["corrected_answer"], answer_language)
+        if web.is_blocked_text(answer):
+            trace.append("Rejected draft because it contained blocked/captcha text")
+            return _with_runtime(_grounded_fallback(query, sources, "blocked web text rejected", trace, answer_language), resources, llm_info)
         if v == "unsupported":
             confidence = min(confidence, 0.45)
             unsupported = True
@@ -424,6 +455,9 @@ def run(query: str, tags: list[str], region: str = "", language: str = "en",
         return _with_runtime(_not_enough_info(answer_language, [], trace, confidence=min(confidence, 0.45)), resources, llm_info)
 
     escalate = _should_escalate(query, confidence)
+    if web.is_blocked_text(answer):
+        trace.append("Rejected final answer because it contained blocked/captcha text")
+        return _with_runtime(_grounded_fallback(query, sources, "blocked web text rejected", trace, answer_language), resources, llm_info)
     return _with_runtime({
         "answer": _ensure_summary(answer, answer_language),
         "citations": _citations(sources, used),
@@ -432,6 +466,204 @@ def run(query: str, tags: list[str], region: str = "", language: str = "en",
         "trace": trace,
         "needs_input": False,
     }, resources, llm_info)
+
+
+def _in_scope(query: str) -> bool:
+    q = _normalize(query)
+    if any(_normalize(term) in q for term in IN_SCOPE_TERMS):
+        return True
+    legal_context = re.search(r"\b(germany|german|deutschland|deutsch|bavaria|bayern)\b", q)
+    legal_topic = re.search(r"\b(law|policy|rule|rules|rights|pflicht|recht|gesetz|behörde|amt)\b", q)
+    return bool(legal_context and legal_topic)
+
+
+def _required_clarifications(query: str, language: str, extra_context: str) -> list[dict]:
+    context = f"{query}\n{extra_context}"
+    q = _normalize(context)
+    questions: list[dict] = []
+
+    if _travel_visa_topic(query):
+        if not _has_nationality_context(q):
+            questions.append(_question(
+                "nationality",
+                "Mit welchem Pass bzw. welcher Staatsangehörigkeit reist du?" if language == "de"
+                else "Which passport or nationality will you travel with?",
+                [
+                    ("pakistani", "Pakistanischer Pass" if language == "de" else "Pakistani passport"),
+                    ("german", "Deutscher Pass" if language == "de" else "German passport"),
+                    ("eu", "EU/EWR-Pass" if language == "de" else "EU/EEA passport"),
+                    ("other", "Andere Staatsangehörigkeit" if language == "de" else "Other nationality"),
+                    ("dual", "Doppelte Staatsangehörigkeit" if language == "de" else "Dual nationality"),
+                ],
+                free_text=True,
+            ))
+        if not _has_status_context(q):
+            questions.append(_question(
+                "germany_status",
+                "Welchen Aufenthaltsstatus hast du aktuell in Deutschland?" if language == "de"
+                else "What is your current status in Germany?",
+                _residence_status_options(language),
+            ))
+        if not _has_travel_purpose(q):
+            questions.append(_question(
+                "travel_purpose",
+                "Was ist der Zweck und ungefähr die Dauer der Reise?" if language == "de"
+                else "What is the purpose and approximate length of the trip?",
+                [
+                    ("tourism_short", "Tourismus/Familienbesuch unter 30 Tage" if language == "de" else "Tourism/family visit under 30 days"),
+                    ("business_short", "Geschäftsreise unter 30 Tage" if language == "de" else "Business trip under 30 days"),
+                    ("study_work", "Studium oder Arbeit" if language == "de" else "Study or work"),
+                    ("transit", "Nur Transit" if language == "de" else "Transit only"),
+                    ("other", "Anderer Zweck" if language == "de" else "Other purpose"),
+                ],
+                free_text=True,
+            ))
+        return questions[:4]
+
+    if _work_permission_topic(query) and not _has_status_context(q):
+        questions.append(_question(
+            "germany_status",
+            "Welchen Aufenthaltsstatus hast du aktuell in Deutschland?" if language == "de"
+            else "What is your current residence status in Germany?",
+            _residence_status_options(language),
+        ))
+        return questions
+
+    if _benefits_topic(query):
+        if not _has_status_context(q):
+            questions.append(_question(
+                "germany_status",
+                "Welchen Aufenthaltsstatus hast du aktuell in Deutschland?" if language == "de"
+                else "What is your current residence status in Germany?",
+                _residence_status_options(language),
+            ))
+        if not re.search(r"\b(child|children|kid|kids|kind|kinder|family|familie|partner|spouse|ehe)\b", q):
+            questions.append(_question(
+                "household",
+                "Geht es um dich allein oder um eine Familie/Kinder?" if language == "de"
+                else "Is this for you alone or for a family/children?",
+                [
+                    ("alone", "Nur ich" if language == "de" else "Only me"),
+                    ("children", "Mit Kindern" if language == "de" else "With children"),
+                    ("partner", "Mit Partner/in" if language == "de" else "With partner/spouse"),
+                    ("family", "Familie mit Kindern" if language == "de" else "Family with children"),
+                ],
+            ))
+        return questions[:3]
+
+    return []
+
+
+def _question(question_id: str, question: str, options: list[tuple[str, str]], free_text: bool = False) -> dict:
+    return {
+        "id": question_id,
+        "question": question,
+        "required": True,
+        "type": "single_choice_with_text" if free_text else "single_choice",
+        "options": [{"value": value, "label": label} for value, label in options],
+    }
+
+
+def _residence_status_options(language: str) -> list[tuple[str, str]]:
+    if language == "de":
+        return [
+            ("german_or_eu", "Deutsche/r oder EU/EWR-Bürger/in"),
+            ("permanent", "Niederlassungserlaubnis/Daueraufenthalt"),
+            ("student", "Aufenthaltstitel zum Studium"),
+            ("work", "Aufenthaltstitel zur Arbeit / Blaue Karte EU"),
+            ("family", "Familiennachzug"),
+            ("asylum_protection", "Asyl, Flüchtlingsschutz oder subsidiärer Schutz"),
+            ("temporary_protection", "Vorübergehender Schutz"),
+            ("visitor", "Schengen-Visum/Besuchsaufenthalt"),
+            ("not_sure", "Ich bin nicht sicher"),
+        ]
+    return [
+        ("german_or_eu", "German or EU/EEA citizen"),
+        ("permanent", "Permanent residence"),
+        ("student", "Student residence permit"),
+        ("work", "Work residence permit / EU Blue Card"),
+        ("family", "Family reunification"),
+        ("asylum_protection", "Asylum/refugee/subsidiary protection"),
+        ("temporary_protection", "Temporary protection"),
+        ("visitor", "Schengen visa / visitor stay"),
+        ("not_sure", "I am not sure"),
+    ]
+
+
+def _clarification_payload(language: str, questions: list[dict], trace: list[str]) -> dict:
+    answer = (
+        "Zusammenfassung\nIch kann das erst sicher beantworten, wenn diese Angaben klar sind. "
+        "Bitte beantworte die Fragen, dann prüfe ich die passenden offiziellen Quellen."
+        if language == "de"
+        else "Summary\nI need a few details before I can answer this safely. "
+             "Please answer these questions, then I will check the matching official sources."
+    )
+    return {
+        "answer": answer,
+        "clarifying_question": questions[0]["question"] if questions else "",
+        "clarifying_questions": questions,
+        "citations": [],
+        "confidence": 0.45,
+        "escalate": False,
+        "trace": trace,
+        "needs_input": True,
+    }
+
+
+def _out_of_scope(language: str, trace: list[str]) -> dict:
+    answer = (
+        "Zusammenfassung\nIch kann nur bei Fragen zu Migration, Aufenthalt, Integration, "
+        "deutscher Verwaltung oder deutschen Rechts-/Politikthemen helfen."
+        if language == "de"
+        else "Summary\nI can only help with immigration, residence, integration, German administration, "
+             "or German law/policy questions."
+    )
+    return {
+        "answer": answer,
+        "citations": [],
+        "confidence": 0.9,
+        "escalate": False,
+        "trace": trace,
+        "needs_input": False,
+    }
+
+
+def _travel_visa_topic(query: str) -> bool:
+    q = _normalize(query)
+    has_visa = re.search(r"\b(visa|visum|entry requirement|einreise)\b", q)
+    has_travel = re.search(r"\b(travel|visit|go to|enter|reise|reisen|besuch|nach|to)\b", q)
+    return bool(has_visa and has_travel)
+
+
+def _work_permission_topic(query: str) -> bool:
+    q = _normalize(query)
+    return bool(re.search(r"\b(can i work|allowed to work|work permit|darf ich arbeiten|arbeiten darf|arbeitserlaubnis)\b", q))
+
+
+def _benefits_topic(query: str) -> bool:
+    q = _normalize(query)
+    return bool(re.search(r"\b(benefit|eligible|kindergeld|buergergeld|burgergeld|sozialleistung|leistungen|jobcenter)\b", q))
+
+
+def _has_nationality_context(text: str) -> bool:
+    return bool(re.search(
+        r"\b(nationality|citizenship|citizen|passport|staatsangehoerigkeit|staatsangehörigkeit|pass|"
+        r"pakistani|indian|syrian|turkish|ukrainian|german citizen|deutscher|deutsche|eu citizen)\b",
+        text,
+    ))
+
+
+def _has_status_context(text: str) -> bool:
+    return bool(re.search(
+        r"\b(student residence|student visa|work permit|blue card|permanent|asylum|refugee|subsidiary|"
+        r"temporary protection|family reunification|schengen|visitor|aufenthaltstitel|aufenthaltserlaubnis|"
+        r"niederlassung|blaue karte|asyl|fluechtling|flüchtling|familiennachzug|duldung|studentenvisum|arbeitsvisum|besuchsvisum)\b",
+        text,
+    ))
+
+
+def _has_travel_purpose(text: str) -> bool:
+    return bool(re.search(r"\b(tourism|tourist|family visit|business|study|work|transit|purpose|dauer|zweck|besuch|arbeit|studium)\b", text))
 
 
 def _contextual_query(query: str, extra_context: str) -> str:

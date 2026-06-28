@@ -87,6 +87,7 @@ export async function ask(rawQuery: string, w: Wallet, extraContext = ""): Promi
       provider: data.provider,
       model: data.model,
       clarifyingQuestion: data.clarifyingQuestion || undefined,
+      clarifyingQuestions: Array.isArray(data.clarifyingQuestions) ? data.clarifyingQuestions : undefined,
       needsInput: Boolean(data.needsInput),
       trace: Array.isArray(data.trace) ? data.trace : undefined,
       resourcesConsidered,

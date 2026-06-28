@@ -163,7 +163,26 @@ export default function Page() {
         {clarifying && (
           <section className="card mt-4 px-4 py-4">
             <div className="font-mono text-[11px] uppercase tracking-wide text-muted">Clarifying question</div>
-            <p className="mt-1 text-[15px] font-medium text-ink">{result!.clarifyingQuestion}</p>
+            {result?.clarifyingQuestions?.length ? (
+              <div className="mt-2 space-y-3">
+                {result.clarifyingQuestions.map((q) => (
+                  <div key={q.id} className="rounded-xl border border-line bg-paper px-3 py-2">
+                    <p className="text-[14px] font-medium text-ink">{q.question}</p>
+                    {q.options?.length ? (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {q.options.map((option) => (
+                          <span key={option.value} className="rounded-full border border-line px-2 py-1 text-[12px] text-muted">
+                            {option.label}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1 text-[15px] font-medium text-ink">{result!.clarifyingQuestion}</p>
+            )}
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
               <input
                 value={extraContext}

@@ -68,6 +68,14 @@ export interface Source {
   excerpt?: string;
 }
 
+export interface ClarifyingQuestion {
+  id: string;
+  question: string;
+  required: boolean;
+  type: string;
+  options: { value: string; label: string }[];
+}
+
 export type LineId = "core" | "asylum" | "student" | "work" | "family";
 
 export interface Station {
@@ -119,6 +127,7 @@ export interface AnswerResult {
   provider?: string;
   model?: string;
   clarifyingQuestion?: string;
+  clarifyingQuestions?: ClarifyingQuestion[];
   needsInput?: boolean;
   trace?: string[];
   resourcesConsidered?: Source[];

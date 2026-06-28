@@ -559,6 +559,11 @@
       "continue": "Weiter",
       "clearSelection": "Auswahl leeren",
       "recommended": "Gute Wahl",
+      "aiChecked": "AI-geprueft",
+      "aiOptions": "Aktuelle Optionen geprueft",
+      "aiFallback": "Sicherheits-Fallback aktiv",
+      "loadingOptions": "Aktuelle Optionen werden geprueft...",
+      "noOptions": "Fuer diese Antworten ist noch keine sichere Option verfuegbar. Gehe zurueck oder frage den Action Workspace.",
       "ageValue": "Alter {{age}}",
       "entry": {
         "question": "Bist du in Deutschland oder planst du gerade den Umzug nach Deutschland?",
@@ -591,7 +596,7 @@
       },
       "planningVisa": {
         "question": "Welche Visumspur sollen wir erkunden?",
-        "subtitle": "Alle gaengigen Wege werden gezeigt. Gute Treffer sind anhand deines Alters markiert."
+        "subtitle": "Optionen werden anhand deiner Antworten geprueft und vor dem Anzeigen gefiltert."
       },
       "visas": {
         "student": "Studentenvisum",
@@ -608,10 +613,15 @@
         "languageHint": "Fuer intensive Deutschkurse vor einem weiteren Weg.",
         "family": "Familiennachzug",
         "familyHint": "Fuer Ehepartner, Eltern, Kinder oder nahe Familie in Deutschland.",
+        "familyMinorHint": "Fuer Minderjaehrige, die mit Eltern oder Sorgeberechtigten nach Deutschland ziehen oder zu ihnen nachziehen.",
+        "school": "Schule oder betreuter Aufenthalt",
+        "schoolHint": "Fuer Minderjaehrige braucht das Sorgeberechtigte, Schulkontext und sorgfaeltige offizielle Pruefung.",
         "selfEmployment": "Selbststaendigkeit",
         "selfEmploymentHint": "Fuer Gruendung, Freiberuflichkeit oder eigene Geschaeftstaetigkeit.",
         "protection": "Asyl oder Schutz",
-        "protectionHint": "Fuer Schutzbedarf. Eine Beratung kann bei diesem sensiblen Weg helfen."
+        "protectionHint": "Fuer Schutzbedarf. Eine Beratung kann bei diesem sensiblen Weg helfen.",
+        "counselor": "Erst mit Beratung sprechen",
+        "counselorHint": "Bei Kindern oder unklarer Lage zuerst menschliche Unterstuetzung holen."
       },
       "readiness": {
         "question": "Was hast du fuer diesen Plan schon?",
@@ -624,6 +634,10 @@
         "trainingContractHint": "Du hast ein Angebot fuer Ausbildung oder Lehre.",
         "familyInvitation": "Familie in Deutschland",
         "familyInvitationHint": "Du moechtest zu einem Familienmitglied in Deutschland ziehen.",
+        "schoolAcceptance": "Schul- oder Programmzusage",
+        "schoolAcceptanceHint": "Du hast eine Schule, einen Austausch oder ein betreutes Programm.",
+        "guardianSupport": "Unterstuetzung durch Eltern/Sorgeberechtigte",
+        "guardianSupportHint": "Ein Elternteil oder gesetzlicher Vormund kann den Antrag unterstuetzen.",
         "exploring": "Noch am Vergleichen",
         "exploringHint": "Du moechtest erst Wege vergleichen, bevor du dich entscheidest."
       },
@@ -636,7 +650,11 @@
         "universityAdmission": "Hochschulzulassung",
         "qualificationProof": "Abschluss- oder Qualifikationsnachweis",
         "languageCertificate": "Sprachzertifikat",
-        "financialProof": "Finanzierungsnachweis"
+        "financialProof": "Finanzierungsnachweis",
+        "guardianConsent": "Einverstaendnis der Eltern/Sorgeberechtigten",
+        "birthCertificate": "Geburtsurkunde",
+        "familyProof": "Nachweis der Familienbeziehung",
+        "schoolAcceptance": "Schul- oder Programmzusage"
       },
       "ai": {
         "badge": "Finale Bubble",

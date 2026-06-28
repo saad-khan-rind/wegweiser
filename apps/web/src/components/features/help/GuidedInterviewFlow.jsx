@@ -25,7 +25,6 @@ import {
   getGuidedNodeOptions,
 } from '../../../data/guidedFlow'
 import { Button } from '../../ui/Button'
-import { ActionCardGrid } from './assistant/ActionCardGrid'
 
 const ICONS = {
   BadgeCheck,
@@ -116,6 +115,18 @@ function selectedClass(selected) {
     : 'border-slate-200 bg-white text-charcoal'
 }
 
+function optionLabel(option, t) {
+  return option?.label ?? (option?.labelKey ? t(option.labelKey) : String(option?.value ?? ''))
+}
+
+function optionHelper(option, t) {
+  return option?.helper ?? (option?.helperKey ? t(option.helperKey) : '')
+}
+
+function optionBadge(option, t) {
+  return option?.badge ?? (option?.badgeKey ? t(option.badgeKey) : '')
+}
+
 function TrailBubble({ item, index }) {
   const side = pathSide(index)
 
@@ -126,7 +137,7 @@ function TrailBubble({ item, index }) {
       transition={{ duration: 0.28 }}
       className={`relative z-10 flex ${side}`}
     >
-      <div className="max-w-[min(100%,28rem)] rounded-[2rem] border border-white/80 bg-white px-5 py-4 shadow-sm ring-1 ring-slate-200/80">
+      <div className="max-w-[min(100%,28rem)] rounded-[999px] border border-white/80 bg-white/95 px-7 py-5 shadow-[0_14px_35px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/80">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
           {item.question}
         </p>
@@ -140,17 +151,19 @@ function TrailBubble({ item, index }) {
 
 function OptionBubble({ option, tone, selected = false, onClick, disabled, t }) {
   const style = toneFor(tone)
+  const badge = optionBadge(option, t)
+  const helper = optionHelper(option, t)
 
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`group flex min-h-24 w-full flex-col justify-center rounded-[1.75rem] border px-4 py-4 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-charcoal disabled:cursor-not-allowed disabled:opacity-60 ${selectedClass(selected)} ${selected ? '' : style.option}`}
+      className={`group flex min-h-24 w-full flex-col justify-center rounded-[999px] border px-6 py-5 text-left transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-charcoal disabled:cursor-not-allowed disabled:opacity-60 ${selectedClass(selected)} ${selected ? '' : style.option}`}
     >
       <span className="flex items-start justify-between gap-3">
         <span className="min-w-0 text-sm font-bold leading-snug sm:text-base">
-          {t(option.labelKey)}
+          {optionLabel(option, t)}
         </span>
         {selected ? (
           <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-charcoal">
@@ -162,14 +175,14 @@ function OptionBubble({ option, tone, selected = false, onClick, disabled, t }) 
           </span>
         ) : null}
       </span>
-      {option.badgeKey && (
+      {badge && (
         <span className={`mt-2 w-fit rounded-full px-2 py-0.5 text-[11px] font-bold ${selected ? 'bg-white/20 text-white' : 'bg-emerald-50 text-emerald-700'}`}>
-          {t(option.badgeKey)}
+          {badge}
         </span>
       )}
-      {option.helperKey && (
+      {helper && (
         <span className={`mt-1.5 text-xs leading-relaxed ${selected ? 'text-white/80' : 'text-slate-500'}`}>
-          {t(option.helperKey)}
+          {helper}
         </span>
       )}
     </button>
@@ -180,11 +193,13 @@ function ActiveBubble({
   node,
   answers,
   loading,
+  options,
+  optionsLoading,
+  optionMeta,
   onAnswer,
   t,
 }) {
   const style = toneFor(node.tone)
-  const options = getGuidedNodeOptions(node, answers)
   const [numberValue, setNumberValue] = useState('')
   const [selectedValues, setSelectedValues] = useState([])
 
@@ -216,7 +231,7 @@ function ActiveBubble({
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -12, scale: 0.98 }}
       transition={{ duration: 0.3 }}
-      className={`relative z-20 mx-auto w-full max-w-3xl rounded-[2.25rem] border p-5 shadow-xl sm:p-6 ${style.active}`}
+      className={`relative z-20 mx-auto w-full max-w-3xl rounded-[3rem] border p-5 shadow-[0_24px_70px_rgba(15,23,42,0.12)] sm:p-6 ${style.active}`}
       aria-live="polite"
     >
       <div className="flex items-start gap-4">
@@ -238,8 +253,27 @@ function ActiveBubble({
         </div>
       </div>
 
+      {optionMeta?.provider && node.type !== 'number' && (
+        <p className="mt-4 w-fit rounded-full border border-slate-200 bg-white/70 px-3 py-1 text-xs font-semibold text-slate-500">
+          {optionMeta.provider === 'local-safety-fallback'
+            ? t('auslander.bubble.aiFallback')
+            : t('auslander.bubble.aiOptions')}
+        </p>
+      )}
+
       {node.type === 'single' && (
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+          {optionsLoading && (
+            <div className="col-span-full flex min-h-28 items-center justify-center rounded-full border border-dashed border-slate-300 bg-white/70 text-sm font-semibold text-slate-500">
+              <Loader2 size={18} className="mr-2 animate-spin" aria-hidden="true" />
+              {t('auslander.bubble.loadingOptions')}
+            </div>
+          )}
+          {!optionsLoading && options.length === 0 && (
+            <div className="col-span-full rounded-[2rem] border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-semibold text-amber-800">
+              {t('auslander.bubble.noOptions')}
+            </div>
+          )}
           {options.map((option) => (
             <OptionBubble
               key={option.value}
@@ -255,7 +289,13 @@ function ActiveBubble({
 
       {node.type === 'multi' && (
         <>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            {optionsLoading && (
+              <div className="col-span-full flex min-h-28 items-center justify-center rounded-full border border-dashed border-slate-300 bg-white/70 text-sm font-semibold text-slate-500">
+                <Loader2 size={18} className="mr-2 animate-spin" aria-hidden="true" />
+                {t('auslander.bubble.loadingOptions')}
+              </div>
+            )}
             {options.map((option) => (
               <OptionBubble
                 key={option.value}
@@ -272,14 +312,14 @@ function ActiveBubble({
             <Button
               variant="secondary"
               onClick={() => setSelectedValues([])}
-              disabled={loading || selectedValues.length === 0}
+              disabled={loading || optionsLoading || selectedValues.length === 0}
               className="sm:w-auto"
             >
               {t('auslander.bubble.clearSelection')}
             </Button>
             <Button
               onClick={() => onAnswer(selectedValues)}
-              disabled={loading}
+              disabled={loading || optionsLoading}
               className="flex-1"
             >
               {loading ? t('common.loading') : t('auslander.bubble.continue')}
@@ -323,6 +363,69 @@ function ActiveBubble({
   )
 }
 
+function AdviceBubble({ card, index }) {
+  const Icon = ICONS[card.icon] ?? Sparkles
+  return (
+    <motion.article
+      initial={{ opacity: 0, y: 18, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.25, delay: index * 0.04 }}
+      className={`relative rounded-[2.5rem] border border-white/80 bg-white/95 p-5 shadow-[0_16px_45px_rgba(15,23,42,0.08)] ring-1 ring-slate-200/70 ${
+        index % 2 === 0 ? 'sm:translate-y-2' : 'sm:-translate-y-2'
+      }`}
+    >
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-civic-purple-light text-civic-purple">
+          <Icon size={19} aria-hidden="true" />
+        </span>
+        <div className="min-w-0">
+          <h3 className="text-base font-black leading-tight text-charcoal">{card.title}</h3>
+          <p className="mt-2 text-sm leading-relaxed text-slate-500">{card.description}</p>
+        </div>
+      </div>
+      {card.content?.steps?.length > 0 && (
+        <ol className="mt-4 space-y-2">
+          {card.content.steps.slice(0, 4).map((step, stepIndex) => (
+            <li key={stepIndex} className="flex gap-2 text-sm text-charcoal">
+              <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-charcoal text-[10px] font-bold text-white">
+                {stepIndex + 1}
+              </span>
+              <span>{step}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+      {card.content?.items?.length > 0 && (
+        <ul className="mt-4 flex flex-wrap gap-2">
+          {card.content.items.slice(0, 6).map((item, itemIndex) => (
+            <li
+              key={itemIndex}
+              className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600"
+            >
+              {item.text}
+            </li>
+          ))}
+        </ul>
+      )}
+      {card.content?.sources?.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {card.content.sources.slice(0, 4).map((source, sourceIndex) => (
+            <a
+              key={sourceIndex}
+              href={source.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full border border-civic-purple/20 bg-civic-purple-light/50 px-3 py-1 text-xs font-bold text-civic-purple hover:bg-civic-purple-light"
+            >
+              {source.label}
+            </a>
+          ))}
+        </div>
+      )}
+    </motion.article>
+  )
+}
+
 function ResultBubble({ path, advice, loading, onGenerate, t }) {
   return (
     <motion.section
@@ -330,9 +433,10 @@ function ResultBubble({ path, advice, loading, onGenerate, t }) {
       initial={{ opacity: 0, y: 24, scale: 0.98 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{ duration: 0.3 }}
-      className="relative z-20 mx-auto w-full max-w-4xl rounded-[2.25rem] border border-slate-200 bg-white p-5 shadow-xl sm:p-6"
+      className="relative z-20 mx-auto w-full max-w-5xl"
       aria-live="polite"
     >
+      <div className="rounded-[3rem] border border-white/80 bg-white/95 p-5 shadow-[0_24px_70px_rgba(15,23,42,0.12)] ring-1 ring-slate-200/80 sm:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-4">
           <span className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-charcoal text-white shadow-sm">
@@ -387,15 +491,20 @@ function ResultBubble({ path, advice, loading, onGenerate, t }) {
           {advice.intro && (
             <p className="mb-4 text-sm font-semibold text-charcoal">{advice.intro}</p>
           )}
-          <ActionCardGrid cards={advice.cards ?? []} />
+          <div className="grid gap-4 lg:grid-cols-2">
+            {(advice.cards ?? []).map((card, index) => (
+              <AdviceBubble key={card.id ?? index} card={card} index={index} />
+            ))}
+          </div>
         </div>
       ) : (
-        <div className="mt-6 rounded-[1.5rem] border border-dashed border-slate-300 bg-slate-50 px-5 py-5">
+        <div className="mt-6 rounded-[999px] border border-dashed border-slate-300 bg-slate-50/80 px-6 py-5">
           <p className="text-sm leading-relaxed text-slate-500">
             {t('auslander.bubble.ai.empty')}
           </p>
         </div>
       )}
+      </div>
     </motion.section>
   )
 }
@@ -412,9 +521,13 @@ export function GuidedInterviewFlow() {
     resetBubbleFlow,
     goToChooseMode,
     generateGuidedAdvice,
+    fetchBubbleOptions,
     loading,
   } = useGuidedInterview()
   const panelRef = useRef(null)
+  const [dynamicOptions, setDynamicOptions] = useState([])
+  const [optionsLoading, setOptionsLoading] = useState(false)
+  const [optionMeta, setOptionMeta] = useState(null)
 
   useEffect(() => {
     panelRef.current?.focus()
@@ -422,26 +535,62 @@ export function GuidedInterviewFlow() {
 
   const isResult = activeBubble?.id === GUIDED_FLOW_RESULT_ID || activeBubble?.type === 'result'
 
+  useEffect(() => {
+    let cancelled = false
+    async function loadOptions() {
+      if (!activeBubble || activeBubble.type === 'number' || activeBubble.type === 'result') {
+        setDynamicOptions([])
+        setOptionMeta(null)
+        return
+      }
+      setOptionsLoading(true)
+      try {
+        const payload = await fetchBubbleOptions(activeBubble.id)
+        if (cancelled) return
+        setDynamicOptions(getGuidedNodeOptions(activeBubble, answers, payload?.options ?? []))
+        setOptionMeta(payload ?? null)
+      } catch {
+        if (!cancelled) {
+          setDynamicOptions(getGuidedNodeOptions(activeBubble, answers))
+          setOptionMeta({ provider: 'local-safety-fallback' })
+        }
+      } finally {
+        if (!cancelled) setOptionsLoading(false)
+      }
+    }
+    loadOptions()
+    return () => {
+      cancelled = true
+    }
+  }, [activeBubble, answers, bubblePath, fetchBubbleOptions])
+
   const formatAnswerLabel = (node, value) => {
     if (node.type === 'number') {
       return t('auslander.bubble.ageValue', { age: value })
     }
     if (node.type === 'multi') {
-      const options = getGuidedNodeOptions(node, answers)
+      const options = getGuidedNodeOptions(node, answers, dynamicOptions)
       const labels = (value ?? [])
-        .map((item) => options.find((option) => option.value === item)?.labelKey)
+        .map((item) => {
+          const option = options.find((candidate) => candidate.value === item)
+          return option ? optionLabel(option, t) : item
+        })
         .filter(Boolean)
-        .map((key) => t(key))
       return labels.length ? labels.join(', ') : t('auslander.bubble.documents.none')
     }
-    const option = getGuidedNodeOptions(node, answers).find((item) => item.value === value)
-    return option?.labelKey ? t(option.labelKey) : String(value)
+    const option = getGuidedNodeOptions(node, answers, dynamicOptions).find((item) => item.value === value)
+    return option ? optionLabel(option, t) : String(value)
   }
 
   const handleAnswer = async (value) => {
-    const patch = getGuidedAnswerPatch(activeBubble, value, answers)
+    const allowedOptions = getGuidedNodeOptions(activeBubble, answers, dynamicOptions)
+    if (activeBubble.type !== 'number' && activeBubble.type !== 'multi') {
+      const selected = allowedOptions.find((option) => option.value === value)
+      if (!selected) return
+    }
+    const patch = getGuidedAnswerPatch(activeBubble, value, answers, allowedOptions)
     const nextAnswers = { ...answers, ...patch }
-    const nextNodeId = getGuidedNextNode(activeBubble, value, nextAnswers)
+    const nextNodeId = getGuidedNextNode(activeBubble, value, nextAnswers, allowedOptions)
     await saveBubbleAnswer({
       nodeId: activeBubble.id,
       nextNodeId,
@@ -531,6 +680,9 @@ export function GuidedInterviewFlow() {
                 node={activeBubble}
                 answers={answers}
                 loading={loading}
+                options={dynamicOptions}
+                optionsLoading={optionsLoading}
+                optionMeta={optionMeta}
                 onAnswer={handleAnswer}
                 t={t}
               />

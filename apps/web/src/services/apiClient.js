@@ -354,7 +354,6 @@ export async function requestAssistant({
   language = 'en',
   region = '',
   questionDefs = [],
-  history = [],
 }) {
   const code = lang(language)
   const s = STRINGS[code]
@@ -366,23 +365,16 @@ export async function requestAssistant({
     try {
       const ctrl = new AbortController()
       const timer = setTimeout(() => ctrl.abort(), timeoutMs())
-      
-      const payload = {
-        query: prompt,
-        tags: [],
-        region,
-        language: code,
-        clarifyingAnswers: answers,
-        history: history.map(msg => ({
-          role: msg.sender === 'user' ? 'user' : 'assistant',
-          content: msg.text || msg.content
-        }))
-      }
-
       const res = await fetch(`${base}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          query: prompt,
+          tags: [],
+          region,
+          language: code,
+          clarifyingAnswers: answers,
+        }),
         signal: ctrl.signal,
       })
       clearTimeout(timer)
@@ -552,6 +544,60 @@ export async function requestGuidedFlowAdvice({
     escalate: Boolean(data.escalate),
     confidence: typeof data.confidence === 'number' ? data.confidence : undefined,
     sources: data.sources ?? [],
+  }
+}
+
+export async function requestGuidedFlowOptions({
+  nodeId,
+  answers = {},
+  path = [],
+  language = 'en',
+  region = '',
+}) {
+  const base = apiBase()
+  if (!base || !nodeId) return null
+
+  try {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs())
+    const res = await fetch(`${base}/api/guided-flow/options`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nodeId,
+        answers,
+        path,
+        region,
+        language: lang(language),
+      }),
+      signal: ctrl.signal,
+    })
+    clearTimeout(timer)
+    if (!res.ok) return null
+    const data = await res.json()
+    const options = Array.isArray(data.options)
+      ? data.options
+          .map((option) => ({
+            value: String(option.value ?? ''),
+            label: String(option.label ?? option.value ?? ''),
+            helper: String(option.helper ?? option.description ?? ''),
+            icon: option.icon ? String(option.icon) : undefined,
+            badge: option.badge ? String(option.badge) : undefined,
+            next: option.next ? String(option.next) : undefined,
+            set: option.set && typeof option.set === 'object' ? option.set : undefined,
+            source: option.source ? String(option.source) : undefined,
+          }))
+          .filter((option) => option.value && option.label)
+      : []
+    return {
+      options,
+      generatedAt: data.generatedAt || new Date().toISOString(),
+      provider: data.provider || 'guided-options',
+      sources: Array.isArray(data.sources) ? data.sources : [],
+      trace: Array.isArray(data.trace) ? data.trace : [],
+    }
+  } catch {
+    return null
   }
 }
 

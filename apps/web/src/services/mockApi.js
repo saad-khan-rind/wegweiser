@@ -3,11 +3,14 @@ import {
   GUIDED_FLOW_RESULT_ID,
   GUIDED_FLOW_START_ID,
   buildGuidedTrailLabel,
+  getGuidedNode,
+  getGuidedNodeOptions,
+  getLocalGuidedFallbackOptions,
 } from '../data/guidedFlow'
 import { resolveRequiredDocuments, unlockNodesFromProfile } from '../data/documentRules'
 import { TOTAL_AUSLANDER_STEPS } from '../data/auslanderInterview'
 import { detectIntent, buildSummaryCard, orderActionCards } from '../data/assistantMock'
-import { requestAssistant, requestGuidedFlowAdvice } from './apiClient'
+import { requestAssistant, requestGuidedFlowAdvice, requestGuidedFlowOptions } from './apiClient'
 
 const STORAGE_KEY = 'migrant_assistant_guest'
 const STORAGE_VERSION = 6
@@ -44,6 +47,7 @@ function defaultHelpFlow() {
     bubblePath: [],
     answers: {},
     guidedAdvice: null,
+    optionCache: {},
     completed: false,
   }
 }
@@ -110,6 +114,7 @@ function migrateSession(session) {
   session.helpFlow.activeBubbleId ??= GUIDED_FLOW_START_ID
   session.helpFlow.bubblePath ??= []
   session.helpFlow.guidedAdvice ??= null
+  session.helpFlow.optionCache ??= {}
   session.helpFlow.answers ??= {}
   session.helpFlow.completed ??= false
   if (!session.nodes) {
@@ -338,6 +343,47 @@ export const apiService = {
     }
     writeStorage(session)
     return session
+  },
+
+  fetchGuidedBubbleOptions: async (nodeId) => {
+    await delay(180)
+    const session = readStorage()
+    if (!session) throw new Error('No guest session')
+    const helpFlow = session.helpFlow ?? defaultHelpFlow()
+    const node = getGuidedNode(nodeId ?? helpFlow.activeBubbleId)
+
+    if (!node || node.type === 'number' || node.type === 'result') {
+      return { options: [], provider: 'none', generatedAt: new Date().toISOString() }
+    }
+
+    const live = await requestGuidedFlowOptions({
+      nodeId: node.id,
+      answers: helpFlow.answers ?? {},
+      path: helpFlow.bubblePath ?? [],
+      language: session.locale ?? DEFAULT_LOCALE,
+    })
+    const fallback = getLocalGuidedFallbackOptions(node.id, helpFlow.answers ?? {})
+    const options = getGuidedNodeOptions(
+      node,
+      helpFlow.answers ?? {},
+      live?.options?.length ? live.options : fallback,
+    )
+
+    const payload = {
+      options,
+      provider: live?.provider ?? (fallback ? 'local-safety-fallback' : 'local-node-fallback'),
+      generatedAt: live?.generatedAt ?? new Date().toISOString(),
+      sources: live?.sources ?? [],
+      trace: live?.trace ?? [],
+    }
+
+    helpFlow.optionCache = {
+      ...(helpFlow.optionCache ?? {}),
+      [node.id]: payload,
+    }
+    session.helpFlow = helpFlow
+    writeStorage(session)
+    return payload
   },
 
   saveGuidedBubbleAnswer: async ({

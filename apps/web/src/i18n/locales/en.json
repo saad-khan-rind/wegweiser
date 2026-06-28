@@ -559,6 +559,11 @@
       "continue": "Continue",
       "clearSelection": "Clear selection",
       "recommended": "Good match",
+      "aiChecked": "AI checked",
+      "aiOptions": "Latest options checked",
+      "aiFallback": "Safety fallback active",
+      "loadingOptions": "Checking current options...",
+      "noOptions": "No safe option is available for these answers yet. Go back or ask the action workspace.",
       "ageValue": "Age {{age}}",
       "entry": {
         "question": "Are you in Germany or currently planning to move to Germany?",
@@ -591,7 +596,7 @@
       },
       "planningVisa": {
         "question": "Which visa path should we explore?",
-        "subtitle": "All common routes are shown. Good matches are highlighted from your age."
+        "subtitle": "Options are checked against your answers and filtered before they appear."
       },
       "visas": {
         "student": "Student visa",
@@ -608,10 +613,15 @@
         "languageHint": "For intensive German courses before another route.",
         "family": "Family reunification",
         "familyHint": "For joining a spouse, parent, child, or close family member.",
+        "familyMinorHint": "For minors moving with or joining parents or guardians in Germany.",
+        "school": "School or guardian-supported stay",
+        "schoolHint": "For minors, this needs a guardian, school context, and careful official review.",
         "selfEmployment": "Self-employment visa",
         "selfEmploymentHint": "For founders, freelancers, and business activity.",
         "protection": "Asylum or protection",
-        "protectionHint": "For protection needs. A counselor can help with this sensitive route."
+        "protectionHint": "For protection needs. A counselor can help with this sensitive route.",
+        "counselor": "Talk to a counselor first",
+        "counselorHint": "For a child or unclear case, get human support before choosing a visa path."
       },
       "readiness": {
         "question": "What do you already have for that plan?",
@@ -624,6 +634,10 @@
         "trainingContractHint": "You have an Ausbildung or apprenticeship offer.",
         "familyInvitation": "Family in Germany",
         "familyInvitationHint": "You plan to join a family member in Germany.",
+        "schoolAcceptance": "School or program acceptance",
+        "schoolAcceptanceHint": "You have a school, exchange, or supervised program lead.",
+        "guardianSupport": "Parent or guardian support",
+        "guardianSupportHint": "A parent or legal guardian can support the application.",
         "exploring": "Still exploring",
         "exploringHint": "You need to compare routes before choosing one."
       },
@@ -636,7 +650,11 @@
         "universityAdmission": "University admission letter",
         "qualificationProof": "Degree or qualification proof",
         "languageCertificate": "Language certificate",
-        "financialProof": "Proof of funds"
+        "financialProof": "Proof of funds",
+        "guardianConsent": "Parent or guardian consent",
+        "birthCertificate": "Birth certificate",
+        "familyProof": "Family relationship proof",
+        "schoolAcceptance": "School or program acceptance"
       },
       "ai": {
         "badge": "Final bubble",

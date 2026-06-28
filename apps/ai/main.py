@@ -62,6 +62,10 @@ class GuidedFlowRequest(BaseModel):
     language: str = "en"
 
 
+class GuidedFlowOptionsRequest(GuidedFlowRequest):
+    nodeId: str = ""
+
+
 class RetrieveRequest(BaseModel):
     query: str
     tags: list[str] = []
@@ -106,6 +110,17 @@ def run_agent(req: AgentRequest) -> dict:
 @app.post("/guided-flow")
 def run_guided_flow(req: GuidedFlowRequest) -> dict:
     return agent.run_guided_flow(
+        req.answers,
+        [item.model_dump() for item in req.path],
+        req.region,
+        _lang(req.language),
+    )
+
+
+@app.post("/guided-flow/options")
+def run_guided_flow_options(req: GuidedFlowOptionsRequest) -> dict:
+    return agent.run_guided_options(
+        req.nodeId,
         req.answers,
         [item.model_dump() for item in req.path],
         req.region,

@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Param, Post, ServiceUnavailableException } from "@nestjs/common";
-import { ChatService, ChatRequest, GuidedFlowRequest } from "./chat.service";
+import { ChatService, ChatRequest, GuidedFlowOptionsRequest, GuidedFlowRequest } from "./chat.service";
 
 @Controller("api")
 export class ChatController {
@@ -28,6 +28,11 @@ export class ChatController {
   @Post("guided-flow/recommendation")
   async guidedRecommendation(@Body() body: GuidedFlowRequest) {
     return this.chat.guidedRecommendation(body ?? {});
+  }
+
+  @Post("guided-flow/options")
+  async guidedOptions(@Body() body: GuidedFlowOptionsRequest) {
+    return this.chat.guidedOptions(body ?? {});
   }
 
   @Get("source/:id")

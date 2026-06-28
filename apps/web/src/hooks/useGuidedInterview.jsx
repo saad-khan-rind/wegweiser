@@ -117,6 +117,10 @@ export function GuidedInterviewProvider({ children }) {
     }
   }, [])
 
+  const fetchBubbleOptions = useCallback(async (nodeId) => {
+    return apiService.fetchGuidedBubbleOptions(nodeId)
+  }, [])
+
   const goBackStep = useCallback(async () => {
     if (currentStep <= 0) {
       const updated = await apiService.setHelpPhase('choose')
@@ -193,6 +197,7 @@ export function GuidedInterviewProvider({ children }) {
       goBackBubble,
       resetBubbleFlow,
       generateGuidedAdvice,
+      fetchBubbleOptions,
       goBackStep,
       completeInterview,
       goToChooseMode,
@@ -218,6 +223,7 @@ export function GuidedInterviewProvider({ children }) {
       goBackBubble,
       resetBubbleFlow,
       generateGuidedAdvice,
+      fetchBubbleOptions,
       goBackStep,
       completeInterview,
       goToChooseMode,

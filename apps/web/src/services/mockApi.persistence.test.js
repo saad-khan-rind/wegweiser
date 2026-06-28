@@ -89,6 +89,22 @@ const guidedAdviceArb = fc.oneof(
   }),
 )
 
+const optionCacheArb = fc.dictionary(
+  fc.constantFrom(...BUBBLE_NODE_IDS),
+  fc.record({
+    options: fc.array(fc.record({
+      value: fc.string({ minLength: 1, maxLength: 24 }),
+      label: fc.string({ minLength: 1, maxLength: 80 }),
+      helper: fc.string({ maxLength: 120 }),
+    }), { maxLength: 4 }),
+    provider: fc.string({ maxLength: 40 }),
+    generatedAt: isoDate,
+    sources: fc.array(fc.record({ title: fc.string({ maxLength: 80 }) }), { maxLength: 3 }),
+    trace: fc.array(fc.string({ maxLength: 80 }), { maxLength: 3 }),
+  }),
+  { maxKeys: 4 },
+)
+
 const helpFlowArb = fc.record({
   phase: fc.constantFrom('choose', 'interview', 'results', 'complete'),
   currentStep: fc.nat({ max: 10 }),
@@ -96,6 +112,7 @@ const helpFlowArb = fc.record({
   bubblePath: fc.array(bubblePathItemArb, { maxLength: 5 }),
   answers: answersArb,
   guidedAdvice: guidedAdviceArb,
+  optionCache: optionCacheArb,
   completed: fc.boolean(),
 })
 
@@ -212,6 +229,7 @@ function expectedMigration(original) {
   expected.helpFlow.activeBubbleId ??= 'entry'
   expected.helpFlow.bubblePath ??= []
   expected.helpFlow.guidedAdvice ??= null
+  expected.helpFlow.optionCache ??= {}
   expected.helpFlow.answers ??= {}
   expected.helpFlow.completed ??= false
   for (const session of expected.assistant.sessions) {

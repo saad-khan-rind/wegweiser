@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+from datetime import datetime, timezone
 
 import web
 import llm
@@ -374,6 +375,43 @@ def run_guided_flow(answers: dict | None, path: list[dict] | None, region: str =
     return result
 
 
+def run_guided_options(node_id: str, answers: dict | None, path: list[dict] | None,
+                       region: str = "", language: str = "en") -> dict:
+    clean_answers = _clean_guided_answers(answers or {})
+    clean_path = _clean_guided_path(path or [])
+    clean_node = re.sub(r"[^a-zA-Z0-9_-]+", "", str(node_id))[:80]
+    query = _guided_options_query(clean_node, clean_answers, clean_path, language)
+    tags = _guided_tags(clean_answers)
+    trace = [f"Building options for node: {clean_node}"]
+    llm_info = llm.available()
+    sources, considered = gather_sources_with_audit(query, tags, k=4, region=region, language=language)
+    trace.append(f"Considered {len(considered)} resources; kept {len(sources)} relevant sources")
+
+    options: list[dict] = []
+    if llm_info.get("reachable") and sources:
+        data = llm.chat_json(
+            _guided_options_system(language),
+            _guided_options_user(clean_node, clean_answers, clean_path, sources, language),
+            temperature=0.05,
+        )
+        if isinstance(data, dict) and isinstance(data.get("options"), list):
+            options = data["options"]
+            trace.append("Generated options with the LLM from retrieved sources")
+
+    if not options:
+        options = _guided_options_fallback(clean_node, clean_answers, language)
+        trace.append("Used conservative fallback options")
+
+    safe_options = _sanitize_guided_options(options, clean_answers, language, clean_node)
+    return _with_runtime({
+        "nodeId": clean_node,
+        "options": safe_options,
+        "sources": _citations(sources, []),
+        "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "trace": trace,
+    }, _resources(considered), llm_info)
+
+
 def run(query: str, tags: list[str], region: str = "", language: str = "en",
         extra_context: str = "", clarifying_answers: dict | None = None) -> dict:
     answer_language = _detect_language(query, language)
@@ -613,6 +651,147 @@ def _guided_tags(answers: dict) -> list[str]:
     if visa == "asylum":
         tags.add("status:asylum")
     return sorted(tags)
+
+
+def _guided_options_query(node_id: str, answers: dict, path: list[dict], language: str) -> str:
+    age = _guided_value(answers.get("age", ""))
+    location = _guided_value(answers.get("locationIntent", ""))
+    visa = _guided_value(answers.get("visaStatus", ""))
+    trail = " ".join(item.get("answerLabel", "") for item in path)
+    if language == "de":
+        return (
+            f"Aktuelle offizielle Deutschland Visa Aufenthalt Optionen fuer Bubble {node_id}. "
+            f"Kontext: Alter {age}, Standort {location}, bisheriger Weg {trail}, Visum {visa}. "
+            "Keine unpassenden Optionen fuer Minderjaehrige."
+        )
+    return (
+        f"Current official Germany visa residence options for guided bubble {node_id}. "
+        f"Context: age {age}, location {location}, path {trail}, visa {visa}. "
+        "No unsuitable options for minors."
+    )
+
+
+def _guided_options_system(language: str) -> str:
+    answer_language = "German" if language == "de" else "English"
+    return (
+        "You generate only the next tappable options for a guided migration flow for Germany. "
+        "Use ONLY the provided sources and known context. Do not invent eligibility. "
+        "For users under 18, never show university student visa, skilled worker, EU Blue Card, "
+        "Opportunity Card, self-employment, or job-offer work paths. Use child/family, school-supervised, "
+        "protection, or counselor-first paths instead. "
+        f"Write labels and helpers in {answer_language}. "
+        "Respond as strict JSON: "
+        '{"options":[{"value": string, "label": string, "helper": string, "icon": string, '
+        '"badge": string, "next": string, "source": string}]}. '
+        "Return at most 8 options."
+    )
+
+
+def _guided_options_user(node_id: str, answers: dict, path: list[dict], sources: list[dict], language: str) -> str:
+    context = _guided_context(answers, path, language)
+    source_block = _source_block(sources)
+    return (
+        f"Current node id: {node_id}\n"
+        f"Return the options that should be shown next for this node.\n"
+        f"Allowed next ids are planning-readiness, planning-documents, current-goal, current-documents, ai-result.\n\n"
+        f"{context}\n\nSources:\n{source_block}"
+    )
+
+
+def _sanitize_guided_options(options: list[dict], answers: dict, language: str, node_id: str) -> list[dict]:
+    out = []
+    for item in options[:12]:
+        if not isinstance(item, dict):
+            continue
+        value = re.sub(r"[^a-zA-Z0-9_-]+", "", str(item.get("value", "")))[:80]
+        label = re.sub(r"\s+", " ", str(item.get("label", value))).strip()[:120]
+        helper = re.sub(r"\s+", " ", str(item.get("helper", ""))).strip()[:240]
+        if not value or not label or not _guided_option_allowed(value, answers):
+            continue
+        next_id = re.sub(r"[^a-zA-Z0-9_-]+", "", str(item.get("next", _default_guided_next(node_id))))[:80]
+        out.append({
+            "value": value,
+            "label": label,
+            "helper": helper,
+            "icon": re.sub(r"[^a-zA-Z0-9_-]+", "", str(item.get("icon", "Sparkles")))[:40],
+            "badge": re.sub(r"\s+", " ", str(item.get("badge", "AI checked" if language == "en" else "AI-geprueft"))).strip()[:80],
+            "next": next_id or _default_guided_next(node_id),
+            "source": re.sub(r"\s+", " ", str(item.get("source", ""))).strip()[:160],
+        })
+
+    if node_id == "planning-visa" and _is_minor(answers):
+        out = [item for item in out if item["value"] not in {"student", "skilled_work", "blue_card", "opportunity_card"}]
+    return out[:8]
+
+
+def _guided_option_allowed(value: str, answers: dict) -> bool:
+    if not _is_minor(answers):
+        return True
+    blocked = {
+        "student",
+        "vocational_training",
+        "skilled_work",
+        "blue_card",
+        "opportunity_card",
+        "self_employment",
+        "job_offer",
+        "university_admission",
+        "training_contract",
+        "employment_contract",
+        "qualification_proof",
+    }
+    return value not in blocked
+
+
+def _is_minor(answers: dict) -> bool:
+    try:
+        return float(answers.get("age", 99)) < 18
+    except Exception:
+        return False
+
+
+def _default_guided_next(node_id: str) -> str:
+    if node_id in {"planning-visa"}:
+        return "planning-readiness"
+    if node_id in {"planning-readiness"}:
+        return "planning-documents"
+    if node_id in {"current-status"}:
+        return "current-goal"
+    if node_id in {"current-goal"}:
+        return "current-documents"
+    return "ai-result"
+
+
+def _guided_options_fallback(node_id: str, answers: dict, language: str) -> list[dict]:
+    de = language == "de"
+    def txt(en: str, german: str) -> str:
+        return german if de else en
+
+    badge = txt("AI safety checked", "AI-sicherheitsgeprueft")
+    if node_id == "planning-visa" and _is_minor(answers):
+        return [
+            {"value": "family", "label": txt("Family reunification for a child", "Familiennachzug fuer ein Kind"), "helper": txt("For minors joining parents or guardians in Germany.", "Fuer Minderjaehrige, die zu Eltern oder Sorgeberechtigten ziehen."), "icon": "Users", "badge": badge, "next": "planning-readiness"},
+            {"value": "school", "label": txt("School or supervised stay", "Schule oder betreuter Aufenthalt"), "helper": txt("Needs guardian and school/program context.", "Braucht Sorgeberechtigte und Schul-/Programmkontext."), "icon": "GraduationCap", "badge": badge, "next": "planning-readiness"},
+            {"value": "asylum", "label": txt("Protection or asylum", "Schutz oder Asyl"), "helper": txt("Sensitive route; human counseling is recommended.", "Sensibler Weg; Beratung ist empfohlen."), "icon": "ShieldCheck", "badge": badge, "next": "planning-readiness"},
+            {"value": "counselor", "label": txt("Talk to a counselor first", "Erst mit Beratung sprechen"), "helper": txt("For a child or unclear case, get human support first.", "Bei Kindern oder unklarer Lage zuerst menschliche Hilfe holen."), "icon": "Lightbulb", "badge": badge, "next": "planning-readiness"},
+        ]
+    if node_id == "planning-visa":
+        return [
+            {"value": "student", "label": txt("Student visa", "Studentenvisum"), "helper": txt("For higher education study or preparation.", "Fuer Hochschulstudium oder Vorbereitung."), "icon": "GraduationCap", "badge": badge, "next": "planning-readiness"},
+            {"value": "vocational_training", "label": txt("Vocational training visa", "Visum zur Ausbildung"), "helper": txt("For Ausbildung or training contracts.", "Fuer Ausbildung oder Ausbildungsvertrag."), "icon": "BriefcaseBusiness", "badge": badge, "next": "planning-readiness"},
+            {"value": "skilled_work", "label": txt("Skilled worker visa", "Fachkraeftevisum"), "helper": txt("For recognized qualifications and qualified employment.", "Fuer anerkannte Qualifikation und qualifizierte Arbeit."), "icon": "BadgeCheck", "badge": badge, "next": "planning-readiness"},
+            {"value": "blue_card", "label": txt("EU Blue Card", "Blaue Karte EU"), "helper": txt("For qualified employment with salary requirements.", "Fuer qualifizierte Beschaeftigung mit Gehaltsanforderungen."), "icon": "Sparkles", "badge": badge, "next": "planning-readiness"},
+            {"value": "opportunity_card", "label": txt("Opportunity Card", "Chancenkarte"), "helper": txt("For job search if criteria are met.", "Zur Jobsuche, wenn Kriterien erfuellt sind."), "icon": "Search", "badge": badge, "next": "planning-readiness"},
+            {"value": "family", "label": txt("Family reunification", "Familiennachzug"), "helper": txt("For joining close family in Germany.", "Zum Nachzug zu enger Familie in Deutschland."), "icon": "Users", "badge": badge, "next": "planning-readiness"},
+        ]
+    if node_id == "planning-readiness" and _is_minor(answers):
+        return [
+            {"value": "family_invitation", "label": txt("Family in Germany", "Familie in Deutschland"), "helper": txt("A parent or guardian is already in Germany.", "Ein Elternteil oder Vormund ist in Deutschland."), "badge": badge, "next": "planning-documents"},
+            {"value": "school_acceptance", "label": txt("School/program acceptance", "Schul-/Programmzusage"), "helper": txt("A school, exchange, or supervised program is involved.", "Eine Schule, ein Austausch oder betreutes Programm ist beteiligt."), "badge": badge, "next": "planning-documents"},
+            {"value": "guardian_support", "label": txt("Guardian support", "Unterstuetzung durch Sorgeberechtigte"), "helper": txt("A legal guardian can support the application.", "Ein gesetzlicher Vormund kann unterstuetzen."), "badge": badge, "next": "planning-documents"},
+            {"value": "still_exploring", "label": txt("Still exploring", "Noch am Vergleichen"), "helper": txt("Compare safe routes first.", "Sichere Wege zuerst vergleichen."), "badge": badge, "next": "planning-documents"},
+        ]
+    return []
 
 
 def _required_clarifications(query: str, language: str, extra_context: str) -> list[dict]:

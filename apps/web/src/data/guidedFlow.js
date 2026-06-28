@@ -23,83 +23,183 @@ const planningDocumentOptions = [
   { value: 'financial_proof', labelKey: 'auslander.bubble.documents.financialProof' },
 ]
 
-function ageNumber(answers = {}) {
+export function guidedAgeNumber(answers = {}) {
   const parsed = Number(answers.age)
   return Number.isFinite(parsed) ? parsed : null
 }
 
-function recommendedForAge(value, age) {
-  if (age === null) return false
-  if (age < 18) return ['family', 'school', 'language_course'].includes(value)
-  if (age <= 26) return ['student', 'vocational_training', 'language_course'].includes(value)
-  if (age <= 35) return ['skilled_work', 'blue_card', 'opportunity_card', 'student'].includes(value)
-  return ['skilled_work', 'blue_card', 'opportunity_card', 'family', 'self_employment'].includes(value)
+export function isGuidedOptionAllowed(option, answers = {}) {
+  const age = guidedAgeNumber(answers)
+  if (age === null) return true
+  const value = option?.value
+
+  if (age < 18) {
+    return ![
+      'student',
+      'vocational_training',
+      'skilled_work',
+      'blue_card',
+      'opportunity_card',
+      'self_employment',
+      'job_offer',
+      'university_admission',
+      'training_contract',
+      'employment_contract',
+      'university_admission',
+      'qualification_proof',
+    ].includes(value)
+  }
+
+  return true
 }
 
-export function planningVisaOptions(answers = {}) {
-  const age = ageNumber(answers)
-  return [
+export function getLocalGuidedFallbackOptions(nodeId, answers = {}) {
+  const age = guidedAgeNumber(answers)
+  const minor = age !== null && age < 18
+
+  if (nodeId === 'planning-visa') {
+    const options = minor
+      ? [
+          {
+            value: 'family',
+            labelKey: 'auslander.bubble.visas.family',
+            helperKey: 'auslander.bubble.visas.familyMinorHint',
+            icon: 'Users',
+            next: 'planning-readiness',
+            badgeKey: 'auslander.bubble.aiChecked',
+          },
+          {
+            value: 'school',
+            labelKey: 'auslander.bubble.visas.school',
+            helperKey: 'auslander.bubble.visas.schoolHint',
+            icon: 'GraduationCap',
+            next: 'planning-readiness',
+          },
+          {
+            value: 'asylum',
+            labelKey: 'auslander.bubble.visas.protection',
+            helperKey: 'auslander.bubble.visas.protectionHint',
+            icon: 'ShieldCheck',
+            next: 'planning-readiness',
+          },
+          {
+            value: 'counselor',
+            labelKey: 'auslander.bubble.visas.counselor',
+            helperKey: 'auslander.bubble.visas.counselorHint',
+            icon: 'Lightbulb',
+            next: 'planning-readiness',
+          },
+        ]
+      : [
     {
       value: 'student',
       labelKey: 'auslander.bubble.visas.student',
       helperKey: 'auslander.bubble.visas.studentHint',
       icon: 'GraduationCap',
+            next: 'planning-readiness',
     },
     {
       value: 'vocational_training',
       labelKey: 'auslander.bubble.visas.vocational',
       helperKey: 'auslander.bubble.visas.vocationalHint',
       icon: 'BriefcaseBusiness',
+            next: 'planning-readiness',
     },
     {
       value: 'skilled_work',
       labelKey: 'auslander.bubble.visas.skilledWork',
       helperKey: 'auslander.bubble.visas.skilledWorkHint',
       icon: 'BadgeCheck',
+            next: 'planning-readiness',
     },
     {
       value: 'blue_card',
       labelKey: 'auslander.bubble.visas.blueCard',
       helperKey: 'auslander.bubble.visas.blueCardHint',
       icon: 'Sparkles',
+            next: 'planning-readiness',
     },
     {
       value: 'opportunity_card',
       labelKey: 'auslander.bubble.visas.opportunity',
       helperKey: 'auslander.bubble.visas.opportunityHint',
       icon: 'Search',
+            next: 'planning-readiness',
     },
     {
       value: 'language_course',
       labelKey: 'auslander.bubble.visas.language',
       helperKey: 'auslander.bubble.visas.languageHint',
       icon: 'Languages',
+            next: 'planning-readiness',
     },
     {
       value: 'family',
       labelKey: 'auslander.bubble.visas.family',
       helperKey: 'auslander.bubble.visas.familyHint',
       icon: 'Users',
+            next: 'planning-readiness',
     },
     {
       value: 'self_employment',
       labelKey: 'auslander.bubble.visas.selfEmployment',
       helperKey: 'auslander.bubble.visas.selfEmploymentHint',
       icon: 'Lightbulb',
+            next: 'planning-readiness',
     },
     {
       value: 'asylum',
       labelKey: 'auslander.bubble.visas.protection',
       helperKey: 'auslander.bubble.visas.protectionHint',
       icon: 'ShieldCheck',
+            next: 'planning-readiness',
     },
-  ].map((option) => ({
-    ...option,
-    recommended: recommendedForAge(option.value, age),
-    badgeKey: recommendedForAge(option.value, age)
-      ? 'auslander.bubble.recommended'
-      : undefined,
-  }))
+        ]
+    return options.filter((option) => isGuidedOptionAllowed(option, answers))
+  }
+
+  if (nodeId === 'planning-readiness' && minor) {
+    return [
+      {
+        value: 'family_invitation',
+        labelKey: 'auslander.bubble.readiness.familyInvitation',
+        helperKey: 'auslander.bubble.readiness.familyInvitationHint',
+        next: 'planning-documents',
+      },
+      {
+        value: 'school_acceptance',
+        labelKey: 'auslander.bubble.readiness.schoolAcceptance',
+        helperKey: 'auslander.bubble.readiness.schoolAcceptanceHint',
+        next: 'planning-documents',
+      },
+      {
+        value: 'guardian_support',
+        labelKey: 'auslander.bubble.readiness.guardianSupport',
+        helperKey: 'auslander.bubble.readiness.guardianSupportHint',
+        next: 'planning-documents',
+      },
+      {
+        value: 'still_exploring',
+        labelKey: 'auslander.bubble.readiness.exploring',
+        helperKey: 'auslander.bubble.readiness.exploringHint',
+        next: 'planning-documents',
+      },
+    ]
+  }
+
+  if (nodeId === 'planning-documents' && minor) {
+    return [
+      { value: 'passport', labelKey: 'auslander.documents.passport' },
+      { value: 'guardian_consent', labelKey: 'auslander.bubble.documents.guardianConsent' },
+      { value: 'birth_certificate', labelKey: 'auslander.bubble.documents.birthCertificate' },
+      { value: 'family_proof', labelKey: 'auslander.bubble.documents.familyProof' },
+      { value: 'school_acceptance', labelKey: 'auslander.bubble.documents.schoolAcceptance' },
+      { value: 'insurance', labelKey: 'auslander.documents.insurance' },
+      { value: 'financial_proof', labelKey: 'auslander.bubble.documents.financialProof' },
+    ]
+  }
+
+  return null
 }
 
 export const GUIDED_FLOW_NODES = {
@@ -215,7 +315,7 @@ export const GUIDED_FLOW_NODES = {
     questionKey: 'auslander.bubble.planningVisa.question',
     subtitleKey: 'auslander.bubble.planningVisa.subtitle',
     tone: 'violet',
-    getOptions: planningVisaOptions,
+    options: [],
     next: 'planning-readiness',
     set: { primaryGoal: 'first_permit' },
   },
@@ -282,25 +382,26 @@ export function getGuidedNode(nodeId = GUIDED_FLOW_START_ID) {
   return GUIDED_FLOW_NODES[nodeId] ?? GUIDED_FLOW_NODES[GUIDED_FLOW_START_ID]
 }
 
-export function getGuidedNodeOptions(node, answers = {}) {
+export function getGuidedNodeOptions(node, answers = {}, optionOverride = null) {
   if (!node) return []
-  if (typeof node.getOptions === 'function') return node.getOptions(answers)
-  return node.options ?? []
+  const localFallback = getLocalGuidedFallbackOptions(node.id, answers)
+  const options = optionOverride ?? localFallback ?? node.options ?? []
+  return options.filter((option) => isGuidedOptionAllowed(option, answers))
 }
 
-export function getGuidedNextNode(node, value, answers = {}) {
+export function getGuidedNextNode(node, value, answers = {}, optionOverride = null) {
   if (!node) return GUIDED_FLOW_START_ID
   if (typeof node.getNext === 'function') return node.getNext(value, answers)
-  const option = getGuidedNodeOptions(node, answers).find((opt) => opt.value === value)
+  const option = getGuidedNodeOptions(node, answers, optionOverride).find((opt) => opt.value === value)
   return option?.next ?? node.next ?? GUIDED_FLOW_RESULT_ID
 }
 
-export function getGuidedOption(node, value, answers = {}) {
-  return getGuidedNodeOptions(node, answers).find((option) => option.value === value)
+export function getGuidedOption(node, value, answers = {}, optionOverride = null) {
+  return getGuidedNodeOptions(node, answers, optionOverride).find((option) => option.value === value)
 }
 
-export function getGuidedAnswerPatch(node, value, answers = {}) {
-  const option = getGuidedOption(node, value, answers)
+export function getGuidedAnswerPatch(node, value, answers = {}, optionOverride = null) {
+  const option = getGuidedOption(node, value, answers, optionOverride)
   return {
     ...(node?.set ?? {}),
     ...(option?.set ?? {}),

@@ -125,4 +125,8 @@ export const DOCUMENT_LABEL_KEYS = {
   qualification_proof: 'auslander.bubble.documents.qualificationProof',
   language_certificate: 'auslander.bubble.documents.languageCertificate',
   financial_proof: 'auslander.bubble.documents.financialProof',
+  guardian_consent: 'auslander.bubble.documents.guardianConsent',
+  birth_certificate: 'auslander.bubble.documents.birthCertificate',
+  family_proof: 'auslander.bubble.documents.familyProof',
+  school_acceptance: 'auslander.bubble.documents.schoolAcceptance',
 }

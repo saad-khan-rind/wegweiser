@@ -59,7 +59,8 @@ export default function Page() {
       setHealth(r);
       const store = r.ai?.pinecone?.backend || r.ai?.vector_store || "unknown";
       const provider = r.ai?.llm?.provider || "unknown";
-      setStatus({ kind: "ok", msg: `AI ${r.ai?.ok ? "online" : "not ready"} · ${provider} · ${store}` });
+      const model = r.ai?.llm?.chat_model || "unknown model";
+      setStatus({ kind: "ok", msg: `AI ${r.ai?.ok ? "online" : "not ready"} · ${provider} / ${model} · ${store}` });
     } catch (e) {
       setStatus({ kind: "err", msg: (e as Error).message });
     }
@@ -140,6 +141,7 @@ export default function Page() {
             <dl className="mt-3 grid grid-cols-1 gap-2 text-[13px] sm:grid-cols-3">
               <StatusItem label="AI" value={health.ai?.ok ? "online" : "not ready"} />
               <StatusItem label="LLM" value={health.ai?.llm?.provider || "unknown"} />
+              <StatusItem label="Model" value={health.ai?.llm?.chat_model || "unknown"} />
               <StatusItem label="Vector store" value={health.ai?.pinecone?.backend || health.ai?.vector_store || "unknown"} />
               <StatusItem label="Pinecone" value={health.ai?.pinecone?.configured ? "configured" : "not configured"} />
               <StatusItem label="Embeddings" value={`${health.ai?.pinecone?.embedding_provider || "unknown"} (${health.ai?.pinecone?.embedding_dim || "?"})`} />

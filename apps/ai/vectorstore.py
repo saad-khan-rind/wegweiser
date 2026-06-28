@@ -41,6 +41,12 @@ class BaseStore:
     def list(self, limit: int = 100) -> list[dict]:
         raise NotImplementedError
 
+    def get(self, record_id: str) -> dict | None:
+        raise NotImplementedError
+
+    def clear(self) -> int:
+        raise NotImplementedError
+
 
 class MemoryStore(BaseStore):
     backend = "memory"
@@ -78,6 +84,19 @@ class MemoryStore(BaseStore):
 
     def list(self, limit: int = 100) -> list[dict]:
         return [{"id": i["id"], "metadata": i["metadata"]} for i in self._items[:limit]]
+
+    def get(self, record_id: str) -> dict | None:
+        with self._lock:
+            item = next((i for i in self._items if i["id"] == record_id), None)
+            if not item:
+                return None
+            return {"id": item["id"], "text": item["text"], "metadata": item["metadata"]}
+
+    def clear(self) -> int:
+        with self._lock:
+            n = len(self._items)
+            self._items = []
+            return n
 
 
 class PineconeStore(BaseStore):
@@ -128,6 +147,30 @@ class PineconeStore(BaseStore):
             return [{"id": "(pinecone)", "metadata": {"total": stats.get("total_vector_count", 0)}}]
         except Exception:  # noqa: BLE001
             return []
+
+    def get(self, record_id: str) -> dict | None:
+        try:
+            res = self._index.fetch(ids=[record_id])
+            vectors = res.get("vectors", {}) if isinstance(res, dict) else getattr(res, "vectors", {})
+            item = vectors.get(record_id) if isinstance(vectors, dict) else None
+            if not item:
+                return None
+            md = (item.get("metadata") if isinstance(item, dict) else getattr(item, "metadata", {})) or {}
+            return {"id": record_id, "text": md.get("text", ""), "metadata": md}
+        except Exception as e:  # noqa: BLE001
+            global _last_error
+            _last_error = str(e)
+            return None
+
+    def clear(self) -> int:
+        try:
+            before = self._index.describe_index_stats().get("total_vector_count", 0)
+            self._index.delete(delete_all=True)
+            return int(before or 0)
+        except Exception as e:  # noqa: BLE001
+            global _last_error
+            _last_error = str(e)
+            raise
 
 
 def diagnostics() -> dict:

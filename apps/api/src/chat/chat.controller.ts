@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post } from "@nestjs/common";
+import { Body, Controller, Get, Param, Post, ServiceUnavailableException } from "@nestjs/common";
 import { ChatService, ChatRequest } from "./chat.service";
 
 @Controller("api")
@@ -23,5 +23,14 @@ export class ChatController {
   @Post("chat")
   async ask(@Body() body: ChatRequest) {
     return this.chat.chat(body ?? { query: "" });
+  }
+
+  @Get("source/:id")
+  async source(@Param("id") id: string) {
+    const ai = process.env.AI_SERVICE_URL?.replace(/\/$/, "");
+    if (!ai) throw new ServiceUnavailableException("AI_SERVICE_URL not configured");
+    const res = await fetch(`${ai}/source/${encodeURIComponent(id)}`);
+    if (!res.ok) throw new ServiceUnavailableException(`source lookup failed (${res.status})`);
+    return res.json();
   }
 }

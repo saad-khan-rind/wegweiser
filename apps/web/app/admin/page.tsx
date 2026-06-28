@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { ingestText, ingestFile, listDocuments, refreshCrawl, getHealth } from "@/lib/api";
+import { ingestText, ingestFile, listDocuments, refreshCrawl, getHealth, clearDocuments } from "@/lib/api";
 
 type Status = { kind: "idle" | "ok" | "err" | "busy"; msg: string };
 
@@ -59,6 +59,16 @@ export default function AdminPage() {
     } catch (e) { setStatus({ kind: "err", msg: (e as Error).message }); }
   }
 
+  async function onClear() {
+    if (!confirm("Clear all vector DB records? This removes uploaded documents and crawled pages from the current index.")) return;
+    setStatus({ kind: "busy", msg: "Clearing vector database..." });
+    try {
+      const r = await clearDocuments(token);
+      setDocs([]);
+      setStatus({ kind: "ok", msg: `Cleared ${r.deleted ?? 0} vector(s).` });
+    } catch (e) { setStatus({ kind: "err", msg: (e as Error).message }); }
+  }
+
   async function onHealth() {
     setStatus({ kind: "busy", msg: "Checking API, AI service, and vector store..." });
     try {
@@ -107,7 +117,7 @@ export default function AdminPage() {
             <StatusItem label="Vector store" value={health.ai?.pinecone?.backend || health.ai?.vector_store || "unknown"} />
             <StatusItem label="Pinecone configured" value={health.ai?.pinecone?.configured ? "yes" : "no"} />
             <StatusItem label="Embeddings" value={`${health.ai?.pinecone?.embedding_provider || "unknown"} (${health.ai?.pinecone?.embedding_dim || "?"})`} />
-            <StatusItem label="LLM" value={health.ai?.llm?.provider || "unknown"} />
+            <StatusItem label="LLM" value={`${health.ai?.llm?.provider || "unknown"} / ${health.ai?.llm?.chat_model || "unknown"}`} />
             {health.ai?.pinecone?.last_error && (
               <div className="sm:col-span-2 rounded-lg border border-line bg-paper px-3 py-2 text-rose">
                 Pinecone error: {health.ai.pinecone.last_error}
@@ -177,7 +187,10 @@ export default function AdminPage() {
       <section className="card px-4 py-4">
         <div className="flex items-center justify-between">
           <h2 className="font-display text-[18px] font-bold text-ink">Stored documents</h2>
-          <button onClick={onList} className="chip px-3 py-1.5 text-[13px]">Refresh list</button>
+          <div className="flex gap-2">
+            <button onClick={onClear} className="chip px-3 py-1.5 text-[13px]">Clear vector DB</button>
+            <button onClick={onList} className="chip px-3 py-1.5 text-[13px]">Refresh list</button>
+          </div>
         </div>
         {docs.length > 0 && (
           <ul className="mt-3 space-y-1">

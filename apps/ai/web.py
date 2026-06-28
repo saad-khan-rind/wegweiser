@@ -29,7 +29,36 @@ OFFICIAL_HOSTS = (
     "germany4ukraine.de",
     "integreat.app",
     "cms.integreat-app.de",
+    "gesetze-im-internet.de",
+    "bayernportal.de",
+    "stadt.muenchen.de",
+    "augsburg.de",
+    "verwaltung.bund.de",
 )
+
+DIRECT_TOPICS = {
+    "registration": [
+        {
+            "id": "official-bmg-17",
+            "title": "Bundesmeldegesetz § 17 Anmeldung, Abmeldung",
+            "url": "https://www.gesetze-im-internet.de/bmg/__17.html",
+            "snippet": (
+                "Wer eine Wohnung bezieht, hat sich innerhalb von zwei Wochen nach dem Einzug "
+                "bei der Meldebehörde anzumelden. Wer aus einer Wohnung auszieht und keine neue "
+                "Wohnung im Inland bezieht, hat sich abzumelden."
+            ),
+        },
+        {
+            "id": "official-bmg-19",
+            "title": "Bundesmeldegesetz § 19 Mitwirkung des Wohnungsgebers",
+            "url": "https://www.gesetze-im-internet.de/bmg/__19.html",
+            "snippet": (
+                "Der Wohnungsgeber muss bei der Anmeldung mitwirken und der meldepflichtigen "
+                "Person den Einzug schriftlich oder elektronisch bestätigen."
+            ),
+        },
+    ],
+}
 
 
 def search(query: str, k: int = 3) -> list[dict]:
@@ -38,6 +67,29 @@ def search(query: str, k: int = 3) -> list[dict]:
     if os.getenv("AGENT_OFFICIAL_WEB_ONLY", "1") == "1":
         results = [r for r in results if is_official_url(r.get("url", ""))]
     return results[:k]
+
+
+def direct_sources(query: str, lang: str = "en", k: int = 3) -> list[dict]:
+    """Small set of official direct lookups for high-frequency tasks.
+
+    These are never written to the vector DB. They only provide stable official
+    context when web search returns irrelevant pages.
+    """
+    topic = _topic(query)
+    if not topic:
+        return []
+    out = []
+    for item in DIRECT_TOPICS.get(topic, []):
+        text = fetch(item["url"], 1600)
+        out.append({**item, "snippet": text or item["snippet"]})
+    return out[:k]
+
+
+def _topic(query: str) -> str:
+    q = (query or "").lower().replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
+    if re.search(r"\b(registration|register|address|anmeldung|anmelden|melde|wohnsitz)\b", q):
+        return "registration"
+    return ""
 
 
 def is_official_url(url: str) -> bool:

@@ -9,15 +9,14 @@ from __future__ import annotations
 import logging
 import os
 import re
-import threading
-import time
 
 from envloader import load_env
 
 load_env()
 
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 import agent
@@ -119,7 +118,15 @@ def _ingest(title: str, text: str, source: str, url: str, date: str) -> dict:
     records = [{
         "id": f"{base}-{i}",
         "text": f"{title}. {c}",
-        "metadata": {"title": title, "source": source or "admin upload", "url": url, "date": date, "chunk": i},
+        "metadata": {
+            "id": f"{base}-{i}",
+            "title": title,
+            "source": source or "admin upload",
+            "source_type": "admin",
+            "url": url,
+            "date": date,
+            "chunk": i,
+        },
     } for i, c in enumerate(chunks)]
     n = get_store().upsert(records)
     log.info("Ingested '%s' as %s chunks", title, n)
@@ -165,6 +172,28 @@ def documents() -> dict:
     return {"documents": get_store().list(200)}
 
 
+@app.delete("/documents")
+def clear_documents() -> dict:
+    n = get_store().clear()
+    return {"ok": True, "deleted": n}
+
+
+@app.get("/source/{source_id}")
+def source(source_id: str) -> JSONResponse:
+    item = get_store().get(source_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="source not found")
+    md = item.get("metadata", {})
+    return JSONResponse({
+        "id": item.get("id", source_id),
+        "title": md.get("title", source_id),
+        "source": md.get("source", "admin upload"),
+        "url": md.get("url", ""),
+        "date": md.get("date", ""),
+        "text": item.get("text", ""),
+    })
+
+
 @app.post("/refresh")
 def refresh(req: RefreshRequest) -> dict:
     lang = _lang(req.lang)
@@ -176,24 +205,7 @@ def _lang(value: str) -> str:
     return "de" if value == "de" else "en"
 
 
-# --------------------------------------------------------------------------- #
-# Startup crawl + periodic refresh (keeps content latest)
-# --------------------------------------------------------------------------- #
-def _refresh_loop() -> None:
-    region = os.getenv("CRAWL_REGION", "bavaria")
-    lang = _lang(os.getenv("CRAWL_LANG", "en"))
-    interval = int(os.getenv("CRAWL_INTERVAL_MIN", "360")) * 60
-    if os.getenv("CRAWL_ON_START", "0") == "1":
-        crawl_region(region, lang)
-    if interval <= 0:
-        return
-    while True:
-        time.sleep(interval)
-        crawl_region(region, lang)
-
-
 @app.on_event("startup")
 def _startup() -> None:
     if os.getenv("CRAWL_ON_START", "0") == "1" or int(os.getenv("CRAWL_INTERVAL_MIN", "0")) > 0:
-        threading.Thread(target=_refresh_loop, daemon=True).start()
-        log.info("Crawler refresh thread started")
+        log.info("Automatic crawler is disabled; use the admin portal to add crawler data explicitly")

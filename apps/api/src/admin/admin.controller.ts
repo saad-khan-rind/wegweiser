@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Get, Post, UploadedFile, UseGuards, UseInterceptors,
+  Body, Controller, Delete, Get, Post, UploadedFile, UseGuards, UseInterceptors,
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { AdminGuard } from "./admin.guard";
@@ -13,6 +13,11 @@ export class AdminController {
   @Get("documents")
   documents() {
     return this.admin.documents();
+  }
+
+  @Delete("documents")
+  clearDocuments() {
+    return this.admin.clearDocuments();
   }
 
   @Post("ingest")

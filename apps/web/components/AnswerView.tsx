@@ -26,6 +26,11 @@ export default function AnswerView({
   return (
     <div className="animate-rise">
       {result.escalate && <EscalateBanner lang={lang} />}
+      {(result.provider || result.model) && (
+        <div className="mb-2 inline-flex rounded-full border border-line bg-paper px-2.5 py-1 font-mono text-[11px] text-muted">
+          AI: {result.provider || "unknown"}{result.model ? ` / ${result.model}` : ""}
+        </div>
+      )}
 
       <p className="text-[15px] leading-relaxed text-ink">{result.answer}</p>
 
@@ -37,6 +42,9 @@ export default function AnswerView({
 
       <ConfidenceRow confidence={result.confidence} lang={lang} />
       {result.sources.length > 0 && <SourceList sources={result.sources} lang={lang} />}
+      {result.resourcesConsidered && result.resourcesConsidered.length > 0 && (
+        <ResourceList resources={result.resourcesConsidered} />
+      )}
       <PrivacyReceipt result={result} lang={lang} />
       {result.trace && result.trace.length > 0 && <VerifyTrace trace={result.trace} />}
     </div>
@@ -87,7 +95,7 @@ function ConfidenceRow({ confidence, lang }: { confidence: number; lang: LangCod
 function SourceList({ sources, lang }: { sources: Source[]; lang: LangCode }) {
   return (
     <div className="mt-3">
-      <div className="mb-1 text-[11px] uppercase tracking-wide text-muted">{t(lang, "sources")}</div>
+      <div className="mb-1 text-[11px] uppercase tracking-wide text-muted">Used sources</div>
       <ul className="space-y-1">
         {sources.map((s, i) => (
           <li key={i} className="flex items-center justify-between gap-2 text-[13px]">
@@ -115,6 +123,43 @@ function SourceList({ sources, lang }: { sources: Source[]; lang: LangCode }) {
         ))}
       </ul>
     </div>
+  );
+}
+
+function ResourceList({ resources }: { resources: Source[] }) {
+  return (
+    <details className="mt-3 rounded-xl border border-line bg-paper/60">
+      <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-muted">
+        Resources considered ({resources.length})
+      </summary>
+      <ul className="space-y-2 border-t border-line px-3 py-3">
+        {resources.map((s, i) => (
+          <li key={`${s.id || s.title}-${i}`} className="text-[12px] leading-snug text-ink">
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex min-w-0 items-center gap-2">
+                <span
+                  className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] uppercase"
+                  style={{ background: s.accepted ? "var(--ink)" : "var(--line)", color: s.accepted ? "var(--paper)" : "var(--muted)" }}
+                >
+                  {s.accepted ? "kept" : "rejected"}
+                </span>
+                {s.href ? (
+                  <a href={s.href} target="_blank" rel="noopener noreferrer" className="truncate underline decoration-dotted underline-offset-2">
+                    {s.title}
+                  </a>
+                ) : (
+                  <span className="truncate">{s.title}</span>
+                )}
+              </span>
+              <span className="shrink-0 font-mono text-[11px] text-muted">
+                relevance {s.relevance ?? 0}
+              </span>
+            </div>
+            {s.excerpt && <p className="mt-1 line-clamp-2 text-muted">{s.excerpt}</p>}
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }
 
@@ -152,5 +197,6 @@ function EscalateBanner({ lang }: { lang: LangCode }) {
 
 function fmt(iso: string): string {
   const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 }

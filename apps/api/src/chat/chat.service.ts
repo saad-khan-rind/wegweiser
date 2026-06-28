@@ -12,10 +12,14 @@ export interface ChatRequest {
 }
 
 export interface Source {
+  id?: string;
   title: string;
   origin: string;
   updatedAt: string;
   url?: string;
+  relevance?: number;
+  accepted?: boolean;
+  excerpt?: string;
 }
 
 export interface ChatResponse {
@@ -26,9 +30,11 @@ export interface ChatResponse {
   escalate: boolean;
   deidentifiedQuery: string;
   provider: string;
+  model?: string;
   clarifyingQuestion?: string;
   needsInput?: boolean;
   trace?: string[];
+  resourcesConsidered?: Source[];
 }
 
 const ESCALATE_RE = /lawyer|deport|abschieb|denied|rejected|suicide|hurt myself|emergency|police|violence/i;
@@ -84,7 +90,23 @@ export class ChatService {
       const d: any = await res.json();
       const citations = Array.isArray(d.citations) ? d.citations : [];
       const sources: Source[] = citations.map((c: any) => ({
-        title: c.title, origin: c.source ?? "source", updatedAt: c.date ?? "", url: c.url ?? "",
+        id: c.id || undefined,
+        title: c.title,
+        origin: c.source ?? "source",
+        updatedAt: c.date ?? "",
+        url: c.url || (c.id && c.origin === "upload" ? `/api/source/${encodeURIComponent(c.id)}` : ""),
+        relevance: c.relevance,
+        accepted: true,
+      }));
+      const resourcesConsidered: Source[] = (Array.isArray(d.resources_considered) ? d.resources_considered : []).map((r: any) => ({
+        id: r.id || undefined,
+        title: r.title,
+        origin: r.source ?? r.origin ?? "source",
+        updatedAt: r.date ?? "",
+        url: r.url || (r.id && r.origin === "upload" ? `/api/source/${encodeURIComponent(r.id)}` : ""),
+        relevance: r.relevance,
+        accepted: Boolean(r.accepted),
+        excerpt: r.excerpt ?? "",
       }));
       return {
         answer: d.answer ?? "",
@@ -93,10 +115,12 @@ export class ChatService {
         confidence: typeof d.confidence === "number" ? d.confidence : 0.6,
         escalate: Boolean(d.escalate),
         deidentifiedQuery: query,
-        provider: "agent",
+        provider: d.provider ?? "agent",
+        model: d.model ?? "",
         clarifyingQuestion: d.clarifying_question || undefined,
         needsInput: Boolean(d.needs_input),
         trace: Array.isArray(d.trace) ? d.trace : undefined,
+        resourcesConsidered,
       };
     } catch (e) {
       this.log.warn(`Agent service unavailable: ${(e as Error).message}. Falling back.`);
@@ -119,16 +143,19 @@ export class ChatService {
           : "I couldn't find a confident answer in the official sources. A human counselor can help with this.",
         cards: [{ kind: "escalate", title: language === "de" ? "Mit Beratung sprechen" : "Talk to a counselor", body: language === "de" ? "Kostenlos und vertraulich." : "Free and confidential." }],
         sources: [], confidence: 0.2, escalate: true, deidentifiedQuery: query, provider: this.llm.provider,
+        model: process.env.OLLAMA_MODEL ?? "",
       };
     }
 
     const composed = await this.llm.compose(this.systemPrompt(language), this.userPrompt(query, tags, docs, language));
     if (composed && composed.answer) {
-      const cards = composed.cards.length ? composed.cards : this.cardsFor(escalate);
+      const cards = composed.cards.length ? composed.cards : this.cardsFor(escalate, language);
       return {
         answer: composed.answer, cards, sources,
         confidence: clamp(escalate ? Math.min(composed.confidence, 0.6) : composed.confidence),
         escalate: composed.escalate || escalate, deidentifiedQuery: query, provider: this.llm.provider,
+        model: process.env.OLLAMA_MODEL ?? "",
+        resourcesConsidered: sources,
       };
     }
 
@@ -139,7 +166,8 @@ export class ChatService {
         : "I found relevant sources, but I can't safely compose a verified answer from them right now. Please read the sources or ask a counselor.",
       cards: this.cardsFor(true, language), sources,
       confidence: 0.35,
-      escalate: true, deidentifiedQuery: query, provider: "mock",
+      escalate: true, deidentifiedQuery: query, provider: "mock", model: "",
+      resourcesConsidered: sources,
     };
   }
 

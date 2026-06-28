@@ -39,6 +39,12 @@ export class AdminService {
     return res.json();
   }
 
+  async clearDocuments() {
+    const res = await fetch(`${aiUrl()}/documents`, { method: "DELETE" });
+    if (!res.ok) throw new ServiceUnavailableException(`clear documents failed (${res.status})`);
+    return res.json();
+  }
+
   async refresh(body: { region?: string; lang?: string }) {
     const res = await fetch(`${aiUrl()}/refresh`, {
       method: "POST",

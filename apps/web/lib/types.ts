@@ -58,10 +58,14 @@ export interface ActionCard {
 }
 
 export interface Source {
+  id?: string;
   title: string;
-  origin: "municipality" | "bamf" | "federal" | "integreat" | "official-web" | "web" | "source";
+  origin: string;
   updatedAt: string; // ISO date
   href?: string;
+  relevance?: number;
+  accepted?: boolean;
+  excerpt?: string;
 }
 
 export type LineId = "core" | "asylum" | "student" | "work" | "family";
@@ -112,7 +116,10 @@ export interface AnswerResult {
   sentTags: string[]; // opaque category tags derived from the wallet
   escalate: boolean;
   origin: "device" | "server";
+  provider?: string;
+  model?: string;
   clarifyingQuestion?: string;
   needsInput?: boolean;
   trace?: string[];
+  resourcesConsidered?: Source[];
 }

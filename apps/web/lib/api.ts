@@ -53,11 +53,26 @@ export async function ask(rawQuery: string, w: Wallet, extraContext = ""): Promi
     clearTimeout(t);
     if (!res.ok) throw new Error(`status ${res.status}`);
     const data = await res.json();
+    const API_BASE = apiBase();
     const sources: Source[] = (data.sources ?? []).map((s: any) => ({
+      id: s.id || undefined,
       title: s.title,
       origin: s.origin ?? "source",
       updatedAt: s.updatedAt ?? s.date ?? "",
-      href: s.url || s.href || undefined,
+      href: sourceHref(s.url || s.href || "", API_BASE),
+      relevance: s.relevance,
+      accepted: s.accepted,
+      excerpt: s.excerpt,
+    }));
+    const resourcesConsidered: Source[] = (data.resourcesConsidered ?? []).map((s: any) => ({
+      id: s.id || undefined,
+      title: s.title,
+      origin: s.origin ?? "source",
+      updatedAt: s.updatedAt ?? s.date ?? "",
+      href: sourceHref(s.url || s.href || "", API_BASE),
+      relevance: s.relevance,
+      accepted: s.accepted,
+      excerpt: s.excerpt,
     }));
     return {
       answer: data.answer ?? "",
@@ -68,9 +83,12 @@ export async function ask(rawQuery: string, w: Wallet, extraContext = ""): Promi
       sentTags: tags,
       escalate: data.escalate ?? false,
       origin: "server",
+      provider: data.provider,
+      model: data.model,
       clarifyingQuestion: data.clarifyingQuestion || undefined,
       needsInput: Boolean(data.needsInput),
       trace: Array.isArray(data.trace) ? data.trace : undefined,
+      resourcesConsidered,
     };
   } catch {
     return unavailableAnswer(cleaned, tags, w.language);
@@ -133,6 +151,15 @@ export async function listDocuments(token: string) {
   return res.json();
 }
 
+export async function clearDocuments(token: string) {
+  const res = await fetch(`${apiBase()}/api/admin/documents`, {
+    method: "DELETE",
+    headers: { ...adminHeaders(token) },
+  });
+  if (!res.ok) throw new Error(`Clear failed (${res.status})`);
+  return res.json();
+}
+
 export async function refreshCrawl(region: string, lang: string, token: string) {
   const res = await fetch(`${apiBase()}/api/admin/refresh`, {
     method: "POST",
@@ -141,6 +168,12 @@ export async function refreshCrawl(region: string, lang: string, token: string) 
   });
   if (!res.ok) throw new Error(`Refresh failed (${res.status})`);
   return res.json();
+}
+
+function sourceHref(url: string, api: string): string | undefined {
+  if (!url) return undefined;
+  if (url.startsWith("/api/")) return `${api}${url}`;
+  return url;
 }
 
 function unavailableAnswer(cleaned: string, tags: string[], lang: Wallet["language"]): AnswerResult {

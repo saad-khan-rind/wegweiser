@@ -277,7 +277,7 @@ def _public_integreat_url(region: str, lang: str, path: str) -> str:
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    region = sys.argv[1] if len(sys.argv) > 1 else os.getenv("CRAWL_REGION", "bavaria")
+    region = sys.argv[1] if len(sys.argv) > 1 else os.getenv("CRAWL_REGION", "München")
     lang = sys.argv[2] if len(sys.argv) > 2 else os.getenv("CRAWL_LANG", "en")
     n = crawl_region(region, lang)
     print(f"Wrote/updated {n} pages")

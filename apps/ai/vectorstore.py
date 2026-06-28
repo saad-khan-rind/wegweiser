@@ -22,6 +22,8 @@ PINECONE_API_KEY = os.getenv("PINECONE_API_KEY", "")
 PINECONE_INDEX = os.getenv("PINECONE_INDEX", "wegweiser")
 PINECONE_CLOUD = os.getenv("PINECONE_CLOUD", "aws")
 PINECONE_REGION = os.getenv("PINECONE_REGION", "us-east-1")
+PINECONE_UPSERT_BATCH = max(1, int(os.getenv("PINECONE_UPSERT_BATCH", "50")))
+PINECONE_TEXT_METADATA_CHARS = max(300, int(os.getenv("PINECONE_TEXT_METADATA_CHARS", "1500")))
 _last_error = ""
 
 
@@ -124,11 +126,13 @@ class PineconeStore(BaseStore):
     def upsert(self, records: list[dict]) -> int:
         vectors = []
         for r in records:
-            md = dict(r.get("metadata", {}))
-            md["text"] = r["text"][:3000]
+            md = _clean_metadata(dict(r.get("metadata", {})))
+            md["text"] = (r.get("text") or "")[:PINECONE_TEXT_METADATA_CHARS]
             vectors.append({"id": r["id"], "values": embeddings.embed_text(r["text"]), "metadata": md})
         try:
-            self._index.upsert(vectors=vectors)
+            for start in range(0, len(vectors), PINECONE_UPSERT_BATCH):
+                batch = vectors[start:start + PINECONE_UPSERT_BATCH]
+                self._index.upsert(vectors=batch)
             return len(vectors)
         except Exception as e:  # noqa: BLE001
             global _last_error
@@ -206,6 +210,22 @@ def _cosine(a: list[float], b: list[float]) -> float:
     na = math.sqrt(sum(x * x for x in a[:n])) or 1.0
     nb = math.sqrt(sum(x * x for x in b[:n])) or 1.0
     return dot / (na * nb)
+
+
+def _clean_metadata(metadata: dict) -> dict:
+    cleaned = {}
+    for key, value in metadata.items():
+        if value is None:
+            continue
+        if isinstance(value, str):
+            cleaned[key] = value[:1200]
+        elif isinstance(value, bool | int | float):
+            cleaned[key] = value
+        elif isinstance(value, list):
+            cleaned[key] = [str(item)[:200] for item in value[:50]]
+        else:
+            cleaned[key] = str(value)[:1200]
+    return cleaned
 
 
 _store: BaseStore | None = None
